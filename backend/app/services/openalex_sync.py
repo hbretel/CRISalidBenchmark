@@ -255,13 +255,14 @@ async def run_openalex_sync() -> None:
             async with AsyncSessionLocal() as session:
                 await _sync_topics_taxonomy(client, session)
 
-            # Refresh the institution object FIRST and recompute the effective
-            # lineage before ingesting works, so a newly-appeared child
-            # institution is picked up the same night rather than one sync late.
-            # See institution_resolver.compute_effective_lineage — OpenAlex's
-            # own `lineage` field is not reliable for this (confirmed empty
-            # beyond self for federated French universities with real child
-            # entities only present under associated_institutions).
+            # Refresh the institution object FIRST. Works ingestion itself now
+            # uses the recursive authorships.institutions.lineage filter (see
+            # OpenAlexClient.paginate_works), so it no longer depends on this
+            # direct-children list to know what to fetch. We still compute and
+            # store it as informational metadata (shown in the Configuration
+            # page, "N structure(s) dans le périmètre") and to log when
+            # OpenAlex's direct associated_institutions data changes — it's
+            # just no longer the scoping mechanism for ingestion.
             institution = await client.get_institution(config.openalex_institution_id)
             new_lineage = compute_effective_lineage(institution)
 
@@ -282,16 +283,17 @@ async def run_openalex_sync() -> None:
                 await session.commit()
 
             logger.info(
-                "Starting works ingestion for institution %s (%d institution(s) in effective "
-                "lineage, from_updated_date=%s)",
+                "Starting works ingestion for institution %s (recursive lineage scope, "
+                "from_updated_date=%s)",
                 config.openalex_institution_id,
-                len(new_lineage),
                 from_updated_date or "none (full sync)",
             )
 
             async def _ingest(from_date: str | None) -> None:
                 nonlocal total_processed
-                async for page in client.paginate_works(new_lineage, from_updated_date=from_date):
+                async for page in client.paginate_works(
+                    config.openalex_institution_id, from_updated_date=from_date
+                ):
                     async with AsyncSessionLocal() as session:
                         await _upsert_topics(session, page)
                         count = await _upsert_works_page(session, page, config.country_code)

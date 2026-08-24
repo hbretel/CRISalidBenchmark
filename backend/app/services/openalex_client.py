@@ -122,30 +122,35 @@ class OpenAlexClient:
 
     async def paginate_works(
         self,
-        institution_ids: str | list[str],
+        institution_id: str,
         per_page: int = 200,
         from_updated_date: str | None = None,
     ) -> AsyncGenerator[list[dict], None]:
-        """Cursor-paginate all works across one or more institution IDs.
+        """Cursor-paginate all works belonging to one institution's full scope.
 
-        Accepts either a single OpenAlex institution ID or a full "effective
-        lineage" list (self + associated_institutions relationship="child" —
-        see institution_resolver.compute_effective_lineage).
+        Uses authorships.institutions.lineage:{institution_id} — this matches
+        any work where an authorship institution's OWN `lineage` field (its
+        full ROR ancestor chain, self up to top, at ANY depth) contains
+        institution_id. Because it's recursive, a single top-level ID captures
+        the entire subtree — direct children, grandchildren, etc. — with no
+        need to enumerate component institutions.
 
-        IMPORTANT — this used to filter on institutions.lineage:{id}, relying
-        on OpenAlex's own ROR-derived lineage. Confirmed broken 2026-08-21 on
-        real data (Université Paris-Saclay, I277688954): OpenAlex's lineage
-        field is empty beyond self for this institution despite 184 real child
-        entities recorded under associated_institutions — so the lineage
-        filter silently ingested only the parent's own directly-affiliated
-        works, missing every component institution's publications. Filtering
-        on institutions.id with the full effective-lineage ID list (OR'd) is
-        the only way to actually capture them.
-
-        Large ID lists are chunked to stay within OpenAlex's practical
-        per-filter OR-value limit. A work affiliated with institutions from two
-        different chunks may be yielded twice — upserting by work ID on the
-        caller side makes this harmless.
+        HISTORY — this previously OR'd institutions.id across an explicit
+        "effective lineage" ID list (self + associated_institutions
+        relationship="child", one level deep — see
+        institution_resolver.compute_effective_lineage), because the shorthand
+        institutions.lineage:{id} filter was believed broken on real data
+        (Université Paris-Saclay, I277688954: OpenAlex's lineage field looked
+        empty beyond self). Re-verified 2026-08-24: `institutions.lineage` was
+        never actually a valid filter field (400 "not a valid field") — only
+        the fully-qualified authorships.institutions.lineage is, and it works
+        correctly. The one-level-deep associated_institutions approach was
+        itself the bug: sampling showed real Paris-Saclay laboratories nested
+        3-9 levels deep (e.g. via an intermediate CNRS joint-unit) that were
+        silently missing from the direct-children list entirely. This filter
+        fixes that and removes the need for OR-chunking (previously required
+        to stay within OpenAlex's practical per-filter OR-value limit, and a
+        source of duplicate-work double-fetching across chunks).
 
         from_updated_date: optional "sync filter" (YYYY-MM-DD) restricting
         results to works created/updated on or after that date — see
@@ -156,45 +161,52 @@ class OpenAlexClient:
 
         Yields one page (list of work dicts) at a time.
         """
-        ids = [institution_ids] if isinstance(institution_ids, str) else list(institution_ids)
-        for chunk in _chunk_ids(ids, OR_FILTER_CHUNK_SIZE):
-            filter_value = "|".join(chunk)
-            filter_str = f"institutions.id:{filter_value}"
-            if from_updated_date:
-                filter_str += f",from_updated_date:{from_updated_date}"
-            cursor = "*"
-            while cursor:
-                data = await self.get_with_retry(
-                    "/works",
-                    params={
-                        "filter": filter_str,
-                        "per-page": per_page,
-                        "cursor": cursor,
-                        "select": (
-                            "id,title,publication_year,type,cited_by_count,"
-                            "is_oa,open_access,authorships,primary_topic,topics,"
-                            "primary_location,language,is_retracted"
-                        ),
-                    },
-                )
-                results = data.get("results", [])
-                if not results:
-                    break
-                yield results
-                cursor = data.get("meta", {}).get("next_cursor")
+        filter_str = f"authorships.institutions.lineage:{institution_id}"
+        if from_updated_date:
+            filter_str += f",from_updated_date:{from_updated_date}"
+        cursor = "*"
+        while cursor:
+            data = await self.get_with_retry(
+                "/works",
+                params={
+                    "filter": filter_str,
+                    "per-page": per_page,
+                    "cursor": cursor,
+                    "select": (
+                        # NOTE: is_oa is NOT a valid top-level select field —
+                        # it only exists nested under open_access.is_oa, which
+                        # _upsert_works_page already reads that way. A
+                        # top-level "is_oa" here 400s every single request.
+                        "id,title,publication_year,type,cited_by_count,"
+                        "open_access,authorships,primary_topic,topics,"
+                        "primary_location,language,is_retracted"
+                    ),
+                },
+            )
+            results = data.get("results", [])
+            if not results:
+                break
+            yield results
+            cursor = data.get("meta", {}).get("next_cursor")
 
     async def get_topic_counts_for_institution(
         self, institution_ids: str | list[str]
     ) -> list[dict]:
         """Return per-topic publication counts for one or more institution IDs.
 
-        Calls GET /works?filter=institutions.id:{ids}&group_by=primary_topic.id
-        which OpenAlex resolves server-side — far cheaper than paginating all
-        works. Accepts a single ID (peers, not known to have this lineage issue
-        at time of writing) or a list (effective lineage — see paginate_works).
-        Counts from different chunks are summed per topic; a work affiliated
-        with institutions from two chunks may be double-counted — acceptable
-        approximation for a volume-based specificity comparison (see §4.5).
+        Calls GET /works?filter=authorships.institutions.lineage:{ids}&group_by=
+        primary_topic.id which OpenAlex resolves server-side — far cheaper than
+        paginating all works. Uses the same recursive lineage filter as
+        paginate_works (see its docstring) so a peer institution's own nested
+        labs/component institutions are counted too, not just works directly
+        affiliated with its exact top-level ID — the same under-counting bug
+        confirmed on our own institution applies equally to any peer with a
+        multi-level structure. Accepts a single ID (the normal case — one call
+        per peer) or a list, OR'd and chunked to stay within OpenAlex's
+        practical per-filter OR-value limit. Counts from different chunks are
+        summed per topic; a work affiliated with lineages from two chunks may
+        be double-counted — acceptable approximation for a volume-based
+        specificity comparison (see §4.5).
 
         Returns a list of {"key": topic_id, "key_display_name": name, "count": N}.
 
@@ -220,7 +232,7 @@ class OpenAlexClient:
             data = await self.get_with_retry(
                 "/works",
                 params={
-                    "filter": f"institutions.id:{filter_value}",
+                    "filter": f"authorships.institutions.lineage:{filter_value}",
                     "group_by": "primary_topic.id",
                     "per-page": 200,
                     "cursor": cursor,

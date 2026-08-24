@@ -70,8 +70,10 @@ function InstitutionSection({ config, onSaved }: { config: ConfigResponse; onSav
         <Building2 size={16} className="text-brand-600" />
         <h2 className="text-sm font-semibold text-gray-700">Institution de référence</h2>
       </div>
-      <p className="text-xs text-gray-500 mb-3">
-        {config.institution_name} · ROR {config.ror_id ?? "—"} · {config.openalex_lineage_ids.length} structure(s) dans le périmètre
+      <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
+        {config.institution_name} · ROR {config.ror_id ?? "—"} ·{" "}
+        {config.openalex_lineage_ids.length} structure(s) directement rattachée(s)
+        <InfoTooltip text="Nombre de structures directement rattachées, tel que connu par OpenAlex (associated_institutions). Informatif uniquement : l'ingestion des publications couvre en réalité toute la hiérarchie (structures de toute profondeur), pas seulement ce niveau direct." />
       </p>
 
       <label className="block text-xs font-medium text-gray-600 mb-1">ID OpenAlex de l&apos;établissement</label>
