@@ -125,6 +125,7 @@ class OpenAlexClient:
         institution_id: str,
         per_page: int = 200,
         from_updated_date: str | None = None,
+        publication_years: list[int] | None = None,
     ) -> AsyncGenerator[list[dict], None]:
         """Cursor-paginate all works belonging to one institution's full scope.
 
@@ -159,9 +160,19 @@ class OpenAlexClient:
         caller (openalex_sync.run_openalex_sync) is responsible for falling
         back to a full sync (this param omitted) if OpenAlex rejects it.
 
+        publication_years: restrict to these publication years (OR'd), e.g.
+        the current Leiden period — the corpus we compare against Leiden peer
+        indicators is itself only computed on that same window, so ingesting
+        the institution's entire history is both unnecessary (≈5x more pages
+        for Paris-Saclay: all-time 562,707 works vs. 113,145 in a 4-year
+        window) and methodologically mismatched. None ingests all years.
+
         Yields one page (list of work dicts) at a time.
         """
         filter_str = f"authorships.institutions.lineage:{institution_id}"
+        if publication_years:
+            years_value = "|".join(str(y) for y in publication_years)
+            filter_str += f",publication_year:{years_value}"
         if from_updated_date:
             filter_str += f",from_updated_date:{from_updated_date}"
         cursor = "*"

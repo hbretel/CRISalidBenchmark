@@ -1,8 +1,17 @@
 """Nightly OpenAlex ingestion job.
 
-Ingests all publications attributed to the configured institution (and its
-ROR child structures) via the institutions.lineage filter, then updates the
-institution object to refresh lineage_ids.
+Ingests publications attributed to the configured institution (and its full
+ROR descendant hierarchy, any depth) via the authorships.institutions.lineage
+filter, then updates the institution object to refresh lineage_ids.
+
+Publication-year scope: restricted to the current Leiden period (e.g.
+2020-2023) rather than the institution's entire history — see
+_current_leiden_window(). Leiden's own peer indicators (pp_top_10, mncs, ...)
+are computed only on that same window, so ingesting more would both cost far
+more (≈5x pages for a typical large university) and be methodologically
+mismatched against the very indicators we're comparing against. The `works`
+table is pruned to match the window on every sync (handles the window
+shifting forward each year when a new Leiden edition is imported).
 
 is_core_publication approximation — §4.1 point 3bis:
   A work is flagged is_core_publication=True when:
@@ -27,18 +36,36 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select, text
+from sqlalchemy import select, func, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.models.instance_config import InstanceConfig
+from app.models.leiden import LeidenSnapshot
 from app.models.sync_log import SyncLog
 from app.models.works import Work, WorkTopic, Topic
 from app.services.openalex_client import OpenAlexClient
 from app.services.institution_resolver import compute_effective_lineage
+from app.services.leiden_period import parse_period_years
 
 logger = logging.getLogger(__name__)
+
+
+async def _current_leiden_window(session: AsyncSession) -> tuple[int, int] | None:
+    """The (start_year, end_year) of the most recent Leiden snapshot's period.
+
+    None if no Leiden data has been imported yet — the caller then skips
+    works ingestion entirely rather than falling back to an unrestricted
+    full-history sync (see run_openalex_sync).
+    """
+    result = await session.execute(
+        select(LeidenSnapshot.period)
+        .where(LeidenSnapshot.snapshot_year == select(func.max(LeidenSnapshot.snapshot_year)).scalar_subquery())
+        .limit(1)
+    )
+    period = result.scalar_one_or_none()
+    return parse_period_years(period)
 
 
 def _calc_is_core(work: dict) -> bool:
@@ -225,6 +252,9 @@ async def run_openalex_sync() -> None:
             logger.warning("OpenAlex sync skipped: instance not yet configured")
             return
 
+        # Restrict ingestion to the current Leiden period — see module docstring.
+        leiden_window = await _current_leiden_window(session)
+
         # Last successful sync — used as an OpenAlex "sync filter" cutoff so
         # keys on a plan with sync-filter access only re-fetch works
         # created/updated since then instead of re-ingesting the full corpus
@@ -242,12 +272,49 @@ async def run_openalex_sync() -> None:
             (prev_sync_at - timedelta(days=1)).date().isoformat() if prev_sync_at else None
         )
 
+        # If the Leiden window has shifted since the works table was last
+        # filled (or this is the first sync ever), from_updated_date alone
+        # would miss publications that are newly in-window but weren't
+        # recently modified in OpenAlex — e.g. a paper published years ago
+        # that just entered scope because the window rolled forward. Force a
+        # full re-sync of the window in that case instead of an incremental one.
+        if leiden_window:
+            bounds_result = await session.execute(
+                select(func.min(Work.publication_year), func.max(Work.publication_year))
+            )
+            existing_bounds = tuple(bounds_result.one())
+            if existing_bounds != leiden_window:
+                logger.info(
+                    "Leiden window is %s but works table currently spans %s — forcing a "
+                    "full re-sync of the new window instead of an incremental one.",
+                    leiden_window,
+                    existing_bounds,
+                )
+                from_updated_date = None
+
         # Create sync log entry
         log = SyncLog(job_name="openalex_nightly", status="running")
         session.add(log)
         await session.commit()
         await session.refresh(log)
         log_id = log.id
+
+    if not leiden_window:
+        logger.warning(
+            "OpenAlex works ingestion skipped: no Leiden data imported yet, so the "
+            "publication-year window to restrict ingestion to is unknown. Import Leiden "
+            "data (Paramètres du benchmark) — works will be ingested on the next sync."
+        )
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(SyncLog).where(SyncLog.id == log_id))
+            log_row = result.scalar_one()
+            log_row.status = "success"
+            log_row.finished_at = datetime.now(timezone.utc)
+            log_row.records_processed = 0
+            await session.commit()
+        return
+
+    publication_years = list(range(leiden_window[0], leiden_window[1] + 1))
 
     total_processed = 0
     async with OpenAlexClient(config.openalex_api_key, config.contact_email) as client:
@@ -284,15 +351,19 @@ async def run_openalex_sync() -> None:
 
             logger.info(
                 "Starting works ingestion for institution %s (recursive lineage scope, "
-                "from_updated_date=%s)",
+                "publication_years=%d-%d, from_updated_date=%s)",
                 config.openalex_institution_id,
+                leiden_window[0],
+                leiden_window[1],
                 from_updated_date or "none (full sync)",
             )
 
             async def _ingest(from_date: str | None) -> None:
                 nonlocal total_processed
                 async for page in client.paginate_works(
-                    config.openalex_institution_id, from_updated_date=from_date
+                    config.openalex_institution_id,
+                    from_updated_date=from_date,
+                    publication_years=publication_years,
                 ):
                     async with AsyncSessionLocal() as session:
                         await _upsert_topics(session, page)
@@ -314,6 +385,25 @@ async def run_openalex_sync() -> None:
                     await _ingest(None)
                 else:
                     raise
+
+            # Prune any works now outside the current window — handles the
+            # window shifting forward each year (a publication_year that just
+            # fell out of scope would otherwise stay in the DB forever, since
+            # the incremental from_updated_date sync only adds/updates rows,
+            # never removes them). CASCADE on work_topics.work_id (ondelete)
+            # removes the matching topic rows too.
+            async with AsyncSessionLocal() as session:
+                prune_result = await session.execute(
+                    text(
+                        "DELETE FROM works WHERE publication_year IS NULL "
+                        "OR publication_year < :start OR publication_year > :end"
+                    ),
+                    {"start": publication_years[0], "end": publication_years[-1]},
+                )
+                pruned = prune_result.rowcount
+                await session.commit()
+            if pruned:
+                logger.info("Pruned %d works outside the current Leiden window", pruned)
 
             # Mark success
             async with AsyncSessionLocal() as session:
