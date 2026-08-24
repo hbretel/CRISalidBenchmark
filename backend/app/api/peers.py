@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, cast, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_config
@@ -40,11 +40,16 @@ async def list_peer_groups(
     config: InstanceConfig = Depends(get_config),
     session: AsyncSession = Depends(get_db),
 ) -> list[PeerGroupSummary]:
+    # size_bracket groups are named "Décile N (...)" — sorting by name alone is
+    # lexicographic ("Décile 10" < "Décile 2"), so sort by the numeric decile
+    # stored in params first (falls back to 0 — and then name — for groups
+    # without a decile, i.e. geographic/custom).
+    decile_sort = func.coalesce(cast(PeerGroup.params["decile"].astext, Integer), 0)
     result = await session.execute(
         select(PeerGroup, func.count(PeerGroupMember.ror_id).label("member_count"))
         .outerjoin(PeerGroupMember, PeerGroupMember.peer_group_id == PeerGroup.id)
         .group_by(PeerGroup.id)
-        .order_by(PeerGroup.type, PeerGroup.name)
+        .order_by(PeerGroup.type, decile_sort, PeerGroup.name)
     )
     rows = result.all()
     return [

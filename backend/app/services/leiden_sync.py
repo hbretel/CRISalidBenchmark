@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
 from app.models.leiden import LeidenSnapshot
 from app.models.sync_log import SyncLog
+from app.services.ror import normalize_ror
 
 logger = logging.getLogger(__name__)
 
@@ -91,18 +92,6 @@ COUNTRY_NAME_OVERRIDES: dict[str, str] = {
     "United Kingdom": "GB",
     "UK": "GB",
 }
-
-_ROR_PREFIX = "https://ror.org/"
-
-
-def normalize_ror(ror_id: str | None) -> str | None:
-    """Strip the https://ror.org/ prefix if present. Convention: stored bare."""
-    if not ror_id:
-        return None
-    ror_id = ror_id.strip()
-    if ror_id.startswith(_ROR_PREFIX):
-        return ror_id[len(_ROR_PREFIX):]
-    return ror_id
 
 
 def resolve_country_code(country_name: str | None) -> str | None:

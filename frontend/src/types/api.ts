@@ -40,6 +40,8 @@ export interface InstitutionSummary {
   period_end: number | null;
   last_openalex_sync: string | null;
   leiden_snapshot_year: number | null;
+  leiden_decile: number | null;
+  leiden_decile_label: string | null;
 }
 
 export interface Indicator {
@@ -141,6 +143,14 @@ export interface SyncJob {
   finished_at: string | null;
   records_processed: number;
   error_message: string | null;
+}
+
+export interface LeidenSummary {
+  snapshot_year: number;
+  period: string | null;
+  row_count: number;
+  institution_count: number;
+  imported_at: string | null;
 }
 
 export interface CompositeScore {

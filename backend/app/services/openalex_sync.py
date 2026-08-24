@@ -24,8 +24,9 @@ is_international_collab:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+import httpx
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -224,6 +225,23 @@ async def run_openalex_sync() -> None:
             logger.warning("OpenAlex sync skipped: instance not yet configured")
             return
 
+        # Last successful sync — used as an OpenAlex "sync filter" cutoff so
+        # keys on a plan with sync-filter access only re-fetch works
+        # created/updated since then instead of re-ingesting the full corpus
+        # every night (see help.openalex.org/api/filtering/#sync-filters-paid-plans).
+        # A 1-day buffer absorbs clock skew and any partial-day updates an
+        # exact cutoff would miss. None on the very first sync (full ingest).
+        prev_sync_result = await session.execute(
+            select(SyncLog.finished_at)
+            .where(SyncLog.job_name == "openalex_nightly", SyncLog.status == "success")
+            .order_by(SyncLog.finished_at.desc())
+            .limit(1)
+        )
+        prev_sync_at = prev_sync_result.scalar_one_or_none()
+        from_updated_date = (
+            (prev_sync_at - timedelta(days=1)).date().isoformat() if prev_sync_at else None
+        )
+
         # Create sync log entry
         log = SyncLog(job_name="openalex_nightly", status="running")
         session.add(log)
@@ -264,17 +282,36 @@ async def run_openalex_sync() -> None:
                 await session.commit()
 
             logger.info(
-                "Starting works ingestion for institution %s (%d institution(s) in effective lineage)",
+                "Starting works ingestion for institution %s (%d institution(s) in effective "
+                "lineage, from_updated_date=%s)",
                 config.openalex_institution_id,
                 len(new_lineage),
+                from_updated_date or "none (full sync)",
             )
-            async for page in client.paginate_works(new_lineage):
-                async with AsyncSessionLocal() as session:
-                    await _upsert_topics(session, page)
-                    count = await _upsert_works_page(session, page, config.country_code)
-                    await session.commit()
-                total_processed += count
-                logger.info("Ingested %d works (total so far: %d)", count, total_processed)
+
+            async def _ingest(from_date: str | None) -> None:
+                nonlocal total_processed
+                async for page in client.paginate_works(new_lineage, from_updated_date=from_date):
+                    async with AsyncSessionLocal() as session:
+                        await _upsert_topics(session, page)
+                        count = await _upsert_works_page(session, page, config.country_code)
+                        await session.commit()
+                    total_processed += count
+                    logger.info("Ingested %d works (total so far: %d)", count, total_processed)
+
+            try:
+                await _ingest(from_updated_date)
+            except httpx.HTTPStatusError as exc:
+                if from_updated_date and exc.response.status_code in (400, 403):
+                    logger.warning(
+                        "OpenAlex rejected the from_updated_date sync filter (HTTP %d) — this "
+                        "API key's plan likely doesn't have sync-filter access. Falling back to "
+                        "a full sync.",
+                        exc.response.status_code,
+                    )
+                    await _ingest(None)
+                else:
+                    raise
 
             # Mark success
             async with AsyncSessionLocal() as session:

@@ -34,6 +34,7 @@ from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
 from app.models.peers import PeerGroup, PeerGroupMember
 from app.models.works import Work
+from app.services.ror import normalize_ror
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +83,11 @@ async def get_impact_indicators(
 
     # ── Own Leiden indicators (row selected by field + core_pubs_only toggle) ──
     own_leiden = None
-    if config.ror_id and snapshot_year:
+    own_ror = normalize_ror(config.ror_id)
+    if own_ror and snapshot_year:
         leiden_result = await session.execute(
             select(LeidenSnapshot).where(
-                LeidenSnapshot.ror_id == config.ror_id,
+                LeidenSnapshot.ror_id == own_ror,
                 LeidenSnapshot.snapshot_year == snapshot_year,
                 LeidenSnapshot.field == field,
                 LeidenSnapshot.core_pubs_only.is_(core_only),

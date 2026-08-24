@@ -83,13 +83,54 @@ async def sync_status(
     config: InstanceConfig = Depends(get_config),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    from sqlalchemy import select
+    from sqlalchemy import select, func
     from app.models.sync_log import SyncLog
+    from app.models.leiden import LeidenSnapshot
 
     result = await session.execute(
         select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
     )
     logs = result.scalars().all()
+
+    # Leiden file summary (§ todo: "au minimum la date d'import, la période
+    # couverte, le nombre de lignes, le nombre d'institutions") — computed
+    # from the current snapshot rather than stored at import time, so it
+    # always reflects what's actually in the DB.
+    leiden_summary = None
+    snapshot_year_result = await session.execute(select(func.max(LeidenSnapshot.snapshot_year)))
+    snapshot_year = snapshot_year_result.scalar_one_or_none()
+    if snapshot_year:
+        period_result = await session.execute(
+            select(LeidenSnapshot.period)
+            .where(LeidenSnapshot.snapshot_year == snapshot_year, LeidenSnapshot.period.isnot(None))
+            .limit(1)
+        )
+        period = period_result.scalar_one_or_none()
+
+        counts_result = await session.execute(
+            select(
+                func.count(),
+                func.count(func.distinct(LeidenSnapshot.ror_id)),
+            ).where(LeidenSnapshot.snapshot_year == snapshot_year)
+        )
+        row_count, institution_count = counts_result.one()
+
+        last_import_result = await session.execute(
+            select(SyncLog.finished_at)
+            .where(SyncLog.job_name == "leiden_annual", SyncLog.status == "success")
+            .order_by(SyncLog.finished_at.desc())
+            .limit(1)
+        )
+        imported_at = last_import_result.scalar_one_or_none()
+
+        leiden_summary = {
+            "snapshot_year": snapshot_year,
+            "period": period,
+            "row_count": row_count,
+            "institution_count": institution_count,
+            "imported_at": imported_at,
+        }
+
     return {
         "recent_jobs": [
             {
@@ -102,5 +143,6 @@ async def sync_status(
                 "error_message": log.error_message,
             }
             for log in logs
-        ]
+        ],
+        "leiden_summary": leiden_summary,
     }

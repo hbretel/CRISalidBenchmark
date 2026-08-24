@@ -1,11 +1,16 @@
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import type { SyncJob } from "@/types/api";
+import type { LeidenSummary, SyncJob } from "@/types/api";
+
+interface SyncStatusResponse {
+  recent_jobs: SyncJob[];
+  leiden_summary: LeidenSummary | null;
+}
 
 export function useSyncStatus() {
-  const { data, error, isLoading } = useSWR<{ recent_jobs: SyncJob[] }>(
+  const { data, error, isLoading } = useSWR<SyncStatusResponse>(
     "/admin/sync/status",
-    () => api.get<{ recent_jobs: SyncJob[] }>("/admin/sync/status"),
+    () => api.get<SyncStatusResponse>("/admin/sync/status"),
     { refreshInterval: 30_000 }, // poll every 30s
   );
 
@@ -20,6 +25,7 @@ export function useSyncStatus() {
     jobs: data?.recent_jobs ?? [],
     lastOpenAlexSync: lastOpenAlex?.finished_at ?? null,
     lastLeidenSync: lastLeiden?.finished_at ?? null,
+    leidenSummary: data?.leiden_summary ?? null,
     isLoading,
     error,
   };

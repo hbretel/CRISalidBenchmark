@@ -124,6 +124,7 @@ class OpenAlexClient:
         self,
         institution_ids: str | list[str],
         per_page: int = 200,
+        from_updated_date: str | None = None,
     ) -> AsyncGenerator[list[dict], None]:
         """Cursor-paginate all works across one or more institution IDs.
 
@@ -146,17 +147,27 @@ class OpenAlexClient:
         different chunks may be yielded twice — upserting by work ID on the
         caller side makes this harmless.
 
+        from_updated_date: optional "sync filter" (YYYY-MM-DD) restricting
+        results to works created/updated on or after that date — see
+        https://help.openalex.org/api/filtering/#sync-filters-paid-plans.
+        Only available to API keys on a plan with sync-filter access; the
+        caller (openalex_sync.run_openalex_sync) is responsible for falling
+        back to a full sync (this param omitted) if OpenAlex rejects it.
+
         Yields one page (list of work dicts) at a time.
         """
         ids = [institution_ids] if isinstance(institution_ids, str) else list(institution_ids)
         for chunk in _chunk_ids(ids, OR_FILTER_CHUNK_SIZE):
             filter_value = "|".join(chunk)
+            filter_str = f"institutions.id:{filter_value}"
+            if from_updated_date:
+                filter_str += f",from_updated_date:{from_updated_date}"
             cursor = "*"
             while cursor:
                 data = await self.get_with_retry(
                     "/works",
                     params={
-                        "filter": f"institutions.id:{filter_value}",
+                        "filter": filter_str,
                         "per-page": per_page,
                         "cursor": cursor,
                         "select": (

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
 from app.models.peers import PeerGroup, PeerGroupMember
+from app.services.ror import normalize_ror
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +52,17 @@ async def recalculate_predefined_groups(session: AsyncSession) -> None:
 
     # Load all institutions at field='All sciences', frac_counting=False,
     # core_pubs_only=False (total publication volume — see docstring above).
+    # config.ror_id is a full "https://ror.org/..." URI (from OpenAlex) while
+    # leiden_snapshot.ror_id is stored bare — normalize before comparing, or
+    # the exclusion below silently never matches (see services/ror.py).
+    own_ror = normalize_ror(config.ror_id)
     result = await session.execute(
         select(LeidenSnapshot).where(
             LeidenSnapshot.snapshot_year == snapshot_year,
             LeidenSnapshot.field == "All sciences",
             LeidenSnapshot.frac_counting.is_(False),
             LeidenSnapshot.core_pubs_only.is_(False),
-            LeidenSnapshot.ror_id != config.ror_id,  # exclude configured institution from peers
+            LeidenSnapshot.ror_id != own_ror,  # exclude configured institution from peers
         )
     )
     all_institutions = result.scalars().all()

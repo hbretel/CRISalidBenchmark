@@ -52,6 +52,7 @@ export default function DashboardPage() {
         countryCode={data.country_code}
         periodStart={data.period_start}
         periodEnd={data.period_end}
+        leidenDecileLabel={data.leiden_decile_label}
         coreOnly={coreOnly}
         onCoreOnlyChange={setCoreOnly}
         profiles={profiles}

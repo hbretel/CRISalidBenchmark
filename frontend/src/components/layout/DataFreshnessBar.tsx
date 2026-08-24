@@ -18,7 +18,7 @@ function isStale(iso: string | null, maxHours = 48): boolean {
 }
 
 export function DataFreshnessBar() {
-  const { lastOpenAlexSync, lastLeidenSync, isLoading } = useSyncStatus();
+  const { lastOpenAlexSync, lastLeidenSync, leidenSummary, isLoading } = useSyncStatus();
 
   if (isLoading) return null;
 
@@ -58,9 +58,16 @@ export function DataFreshnessBar() {
       <span className="text-gray-400">|</span>
       <span className="text-gray-600">
         <strong>Leiden :</strong>{" "}
-        {lastLeidenSync
-          ? <span className="text-gray-700">importé le {formatDate(lastLeidenSync)}</span>
-          : <span className="text-gray-500">aucun import</span>}
+        {lastLeidenSync && leidenSummary ? (
+          <span className="text-gray-700">
+            importé le {formatDate(lastLeidenSync)}
+            {leidenSummary.period && <> · période {leidenSummary.period}</>} ·{" "}
+            {leidenSummary.row_count.toLocaleString("fr-FR")} lignes ·{" "}
+            {leidenSummary.institution_count.toLocaleString("fr-FR")} établissements
+          </span>
+        ) : (
+          <span className="text-gray-500">aucun import</span>
+        )}
       </span>
       <span className="ml-auto flex items-center gap-1 text-gray-400">
         <Clock size={11} />

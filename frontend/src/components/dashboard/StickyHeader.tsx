@@ -10,6 +10,7 @@ interface Props {
   countryCode: string | null;
   periodStart: number | null;
   periodEnd: number | null;
+  leidenDecileLabel: string | null;
   coreOnly: boolean;
   onCoreOnlyChange: (v: boolean) => void;
   profiles: WeightProfileResponse[] | undefined;
@@ -34,6 +35,7 @@ export function StickyHeader({
   countryCode,
   periodStart,
   periodEnd,
+  leidenDecileLabel,
   coreOnly,
   onCoreOnlyChange,
   profiles,
@@ -59,6 +61,14 @@ export function StickyHeader({
           )}
           <span className="text-gray-300">·</span>
           <span>{period}</span>
+          {leidenDecileLabel && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="text-brand-600" title="Décile Leiden (nombre de publications) d'appartenance">
+                {leidenDecileLabel}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
