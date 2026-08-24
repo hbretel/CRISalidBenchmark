@@ -1,0 +1,70 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+/**
+ * Persists the "current" peer group / weight profile choice across the whole
+ * app (sticky dashboard header + Paramètres du benchmark page) via
+ * localStorage — there's no server-side notion of a logged-in user's current
+ * selection in this single-tenant app, so the browser is the source of truth.
+ *
+ * Falls back to `fallback` (the computed default: geographic group / the
+ * "Équilibré" profile) whenever nothing is stored yet, or the stored id no
+ * longer resolves to a real item (e.g. a custom group/profile was deleted).
+ */
+function usePersistedSelection(
+  storageKey: string,
+  fallback: number | null,
+  validIds: number[] | undefined,
+): [number | null, (id: number) => void] {
+  const [stored, setStored] = useState<number | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(storageKey);
+    setStored(raw ? Number(raw) : null);
+    setHydrated(true);
+  }, [storageKey]);
+
+  function set(id: number) {
+    setStored(id);
+    window.localStorage.setItem(storageKey, String(id));
+  }
+
+  if (!hydrated) return [null, set];
+
+  const isValid = stored !== null && (!validIds || validIds.includes(stored));
+  return [isValid ? stored : fallback, set];
+}
+
+export function useCurrentPeerGroupId(
+  defaultId: number | null,
+  validIds: number[] | undefined,
+): [number | null, (id: number) => void] {
+  return usePersistedSelection("crisalid.currentPeerGroupId", defaultId, validIds);
+}
+
+export function useCurrentWeightProfileId(
+  defaultId: number | null,
+  validIds: number[] | undefined,
+): [number | null, (id: number) => void] {
+  return usePersistedSelection("crisalid.currentWeightProfileId", defaultId, validIds);
+}
+
+export function useCoreOnly(): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem("crisalid.coreOnly");
+    if (raw !== null) setValue(raw === "true");
+    setHydrated(true);
+  }, []);
+
+  function set(v: boolean) {
+    setValue(v);
+    window.localStorage.setItem("crisalid.coreOnly", String(v));
+  }
+
+  return [hydrated ? value : true, set];
+}
