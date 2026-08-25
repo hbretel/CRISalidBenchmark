@@ -28,6 +28,10 @@ export function ImpactCitationsSection({ peerGroupId, coreOnly }: Props) {
     headline?.leiden_column === "pp_10_cits"
       ? "% avec ≥ 10 citations (pp_10_cits)"
       : "% top 10% cités (pp_top_10)";
+  const hIndexLabel =
+    data?.period_start && data?.period_end
+      ? `Indice h (publications core, ${data.period_start}–${data.period_end})`
+      : "Indice h (publications core)";
 
   return (
     <section className="mb-10">
@@ -80,7 +84,7 @@ export function ImpactCitationsSection({ peerGroupId, coreOnly }: Props) {
               indicator={data.indicators.citations_brutes_moyennes}
               formatValue={(v) => v.toFixed(1)}
             />
-            <SubIndicatorCard label="Indice h (publications core)" indicator={data.indicators.h_index_core} />
+            <SubIndicatorCard label={hIndexLabel} indicator={data.indicators.h_index_core} />
             <SubIndicatorCard label="% accès ouvert" indicator={data.indicators.oa_pct} unit="%" />
             <SubIndicatorCard label="% collaboration internationale" indicator={data.indicators.collab_intl_pct} unit="%" />
           </div>

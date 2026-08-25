@@ -34,6 +34,7 @@ from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
 from app.models.peers import PeerGroup, PeerGroupMember
 from app.models.works import Work
+from app.services.leiden_period import parse_period_years
 from app.services.ror import normalize_ror
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,17 @@ async def get_impact_indicators(
         select(func.max(LeidenSnapshot.snapshot_year))
     )
     snapshot_year = snapshot_result.scalar_one_or_none()
+
+    # Works ingestion is restricted to the current Leiden period window (see
+    # openalex_sync.py), so the h-index / citation counts below are implicitly
+    # scoped to these publication years — surfaced here for the frontend.
+    period_result = await session.execute(
+        select(LeidenSnapshot.period)
+        .where(LeidenSnapshot.snapshot_year == snapshot_year, LeidenSnapshot.period.isnot(None))
+        .limit(1)
+    )
+    period_years = parse_period_years(period_result.scalar_one_or_none())
+    period_start, period_end = period_years if period_years else (None, None)
 
     # ── Own Leiden indicators (row selected by field + core_pubs_only toggle) ──
     own_leiden = None
@@ -182,6 +194,8 @@ async def get_impact_indicators(
         "field": field,
         "core_only": core_only,
         "snapshot_year": snapshot_year,
+        "period_start": period_start,
+        "period_end": period_end,
         "peer_group_size": len(peer_leiden),
         "indicators": {
             "impact_normalise_leiden": {
@@ -216,7 +230,12 @@ async def get_impact_indicators(
                 "value": h_index,
                 "percentile": None,
                 "source": "openalex",
-                "description": "Indice h sur les publications core (calculé en local)",
+                "description": (
+                    f"Indice h sur les publications core, calculé en local sur la période "
+                    f"{period_start}–{period_end} (fenêtre du Leiden Ranking en cours)"
+                    if period_start and period_end
+                    else "Indice h sur les publications core (calculé en local)"
+                ),
             },
             "oa_pct": {
                 "value": oa_pct,

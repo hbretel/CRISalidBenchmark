@@ -67,6 +67,8 @@ export interface ImpactIndicators {
   field: string;
   core_only: boolean;
   snapshot_year: number | null;
+  period_start: number | null;
+  period_end: number | null;
   peer_group_size: number;
   indicators: {
     // Toggle-dependent: pp_top_10 (core_only=true) or pp_10_cits (core_only=false).
@@ -83,22 +85,29 @@ export interface ImpactIndicators {
 export interface HerfindahlIndex {
   value: number;
   label: string;
+  explanation: string;
   description: string;
 }
 
 export interface SignatureTopic {
   topic_id: string;
-  own_share: number;
-  peer_avg_share: number;
+  topic_name: string;
+  own_publication_count: number;
+  own_share_permille: number;
+  peer_avg_share_permille: number;
   ratio: number;
 }
 
+/** Domain > Field > Subfield > Topic node — `children` is absent on leaves (Topics). */
+export interface TopicTreeNode {
+  id: string;
+  name: string;
+  value: number;
+  children?: TopicTreeNode[];
+}
+
 export interface SpecificityIndicators {
-  thematic_profile: Array<{
-    name: string;
-    children: Array<{ name: string; value: number }>;
-    total: number;
-  }>;
+  thematic_profile: TopicTreeNode[];
   herfindahl: HerfindahlIndex;
   topics_signature: {
     items: SignatureTopic[];

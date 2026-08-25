@@ -4,11 +4,12 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import type { SpecificityIndicators } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { Treemap, ResponsiveContainer } from "recharts";
+import { ThematicTreemap } from "./ThematicTreemap";
+import { TopicsSignatureTable } from "./TopicsSignatureTable";
 
 const HERFINDAHL_COLORS: Record<string, string> = {
-  "peu spécialisé": "bg-blue-100 text-blue-800 border-blue-200",
-  "moyennement spécialisé": "bg-amber-100 text-amber-800 border-amber-200",
+  "généraliste": "bg-blue-100 text-blue-800 border-blue-200",
+  "modérément spécialisé": "bg-amber-100 text-amber-800 border-amber-200",
   "très spécialisé": "bg-green-100 text-green-800 border-green-200",
 };
 
@@ -43,25 +44,10 @@ export function SpecialtyDomainsSection({ peerGroupId }: Props) {
         <div className="space-y-6">
           <div className="bg-white border rounded-lg p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              Carte thématique (Topics OpenAlex)
-              <InfoTooltip text="Répartition des publications par domaine et sous-champ selon la taxonomie Topics d'OpenAlex (Domain > Field > Subfield > Topic). La surface est proportionnelle au nombre de publications." />
-            </h3>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <Treemap data={data.thematic_profile} dataKey="total" aspectRatio={4 / 3} stroke="#fff" fill="#3b82f6" />
-              </ResponsiveContainer>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">
-              {data.total_works_analysed.toLocaleString("fr-FR")} publications analysées (corpus complet)
-            </p>
-          </div>
-
-          <div className="bg-white border rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
               Indice de Herfindahl (spécialisation disciplinaire)
               <InfoTooltip text={data.herfindahl.description} />
             </h3>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mb-2">
               <span className="text-3xl font-bold text-gray-900">{data.herfindahl.value.toFixed(3)}</span>
               <span
                 className={`text-sm font-medium px-2.5 py-1 rounded border ${
@@ -71,10 +57,19 @@ export function SpecialtyDomainsSection({ peerGroupId }: Props) {
                 {data.herfindahl.label}
               </span>
             </div>
+            <p className="text-sm text-gray-700">{data.herfindahl.explanation}</p>
             <div className="mt-3 text-xs text-gray-500">
               Calculé au niveau <em>field</em> (2e niveau de la hiérarchie OpenAlex). H ∈ [0, 1] —
               H proche de 0 : diffus ; H proche de 1 : très concentré.
             </div>
+          </div>
+
+          <div className="bg-white border rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              Carte thématique (Topics OpenAlex)
+              <InfoTooltip text="Répartition des publications selon la taxonomie Topics d'OpenAlex (Domain > Field > Subfield > Topic). La surface est proportionnelle au nombre de publications. Cliquez sur une case pour explorer le niveau suivant." />
+            </h3>
+            <ThematicTreemap data={data.thematic_profile} totalWorks={data.total_works_analysed} />
           </div>
 
           <div className="bg-white border rounded-lg p-4">
@@ -93,18 +88,7 @@ export function SpecialtyDomainsSection({ peerGroupId }: Props) {
                 Aucun topic ne dépasse le seuil (×{data.topics_signature.threshold}) par rapport aux pairs.
               </p>
             ) : (
-              <div className="divide-y">
-                {data.topics_signature.items.slice(0, 20).map((t) => (
-                  <div key={t.topic_id} className="py-2 flex items-center justify-between text-sm">
-                    <span className="font-mono text-xs text-gray-500">{t.topic_id}</span>
-                    <div className="flex items-center gap-4 text-xs text-gray-600">
-                      <span>Établ. {t.own_share.toFixed(1)}%</span>
-                      <span>Pairs {t.peer_avg_share.toFixed(1)}%</span>
-                      <span className="font-semibold text-green-700">×{t.ratio.toFixed(1)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <TopicsSignatureTable items={data.topics_signature.items} />
             )}
           </div>
         </div>

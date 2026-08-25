@@ -8,6 +8,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { WeightProfileModal } from "@/components/benchmark/WeightProfileModal";
 import { PeerGroupModal } from "@/components/benchmark/PeerGroupModal";
 import { LeidenImportPanel } from "@/components/benchmark/LeidenImportPanel";
+import { PeerTopicCachePanel } from "@/components/benchmark/PeerTopicCachePanel";
 import { useWeightProfiles, getDefaultWeightProfileId } from "@/hooks/useWeightProfiles";
 import { usePeerGroups, getDefaultPeerGroupId } from "@/hooks/usePeerGroups";
 import { useCurrentPeerGroupId, useCurrentWeightProfileId } from "@/hooks/useCurrentSelection";
@@ -189,6 +190,7 @@ export default function ParametresBenchmarkPage() {
               <Users size={13} />
               {currentGroup.member_count} établissements
             </div>
+            <PeerTopicCachePanel groupId={currentGroup.id} />
           </div>
         )}
 
