@@ -6,7 +6,7 @@ import type { GroupBenchmark } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { PercentileGauge } from "@/components/indicators/PercentileGauge";
 import { ScoreBreakdownModal } from "@/components/benchmark/ScoreBreakdownModal";
-import { GROUP_IMPACT_INDICATORS } from "@/lib/constants";
+import { GROUP_IMPACT_INDICATORS, GROUP_VOLUME_INDICATORS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 const pct = (v: number | null | undefined) =>
   v == null ? t("common.dash") : `${v.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
 
-/** Reference institution on the group benchmark: P, global score and the impact indicators. */
+/** Reference institution on the group benchmark: P, global score, the impact and volume indicators. */
 export function GroupOverview({ benchmark, profileName }: Props) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const own = benchmark.rows.find((r) => r.is_own);
@@ -71,6 +71,22 @@ export function GroupOverview({ benchmark, profileName }: Props) {
             </span>
             <span className="text-2xl font-bold text-gray-900">{pct(own.impact[key])}</span>
             <PercentileGauge percentile={own.impact_percentiles[key] ?? null} size="sm" />
+          </div>
+        ))}
+      </div>
+
+      <h3 className="text-sm font-semibold text-gray-700 mt-6 mb-2">{t("axis.volume_publications")}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {GROUP_VOLUME_INDICATORS.map((key) => (
+          <div key={key} className="bg-white border rounded-lg p-4 flex flex-col gap-2">
+            <span className="text-sm font-medium text-gray-700 flex items-center justify-between gap-2">
+              {t(`indicator.${key}`)}
+              <InfoTooltip text={t(`indicatorDescription.${key}`)} />
+            </span>
+            <span className="text-2xl font-bold text-gray-900">
+              {own.volume[key]?.toLocaleString("fr-FR") ?? t("common.dash")}
+            </span>
+            <PercentileGauge percentile={own.volume_percentiles[key] ?? null} size="sm" />
           </div>
         ))}
       </div>

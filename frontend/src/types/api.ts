@@ -96,10 +96,14 @@ export interface SignatureTopic {
   field_name: string | null;
   own_publications: number;
   own_share_permille: number;
-  own_top10_pct: number;
-  own_oa_pct: number;
-  own_intl_pct: number;
+  /** Impact shares (%) and volume counts on the topic, same keys as GroupBenchmarkRow. */
+  own_impact: Record<string, number | null>;
+  own_volume: Record<string, number>;
+  /** Estimated global quality coefficient on the topic. */
+  own_quality: number | null;
   own_score: number;
+  /** Topic-level score derivation, same layout as the group benchmark. */
+  breakdown: ScoreAxis[];
   runner_up_score: number | null;
   runner_up_name: string | null;
   margin: number | null;
@@ -172,7 +176,7 @@ export interface ScoreComponent {
 }
 
 export interface ScoreAxis {
-  axis: "impact_scientifique" | "specificite_disciplinaire" | "qualite";
+  axis: "impact_scientifique" | "volume_publications" | "specificite_disciplinaire" | "qualite";
   applicable: boolean;
   score: number | null;
   weight: number;
@@ -206,6 +210,9 @@ export interface GroupBenchmarkRow {
   p: number | null;
   impact: Record<string, number | null>;
   impact_percentiles: Record<string, number | null>;
+  /** Numbers of publications (P-type counterparts of the impact shares). */
+  volume: Record<string, number>;
+  volume_percentiles: Record<string, number | null>;
   specialization_rate: number | null;
   specialization_percentile: number | null;
   quality: InstitutionQuality | null;

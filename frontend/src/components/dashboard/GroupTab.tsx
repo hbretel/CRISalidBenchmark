@@ -50,7 +50,7 @@ export function GroupTab({ groupId, profileId, profileName, domain }: Props) {
           <GroupOverview benchmark={data} profileName={profileName} />
           <ComparisonInstitutionsTable benchmark={data} profileName={profileName} domain={domain} />
           <SpecializationSection benchmark={data} domain={domain} />
-          <TopicsSignatureSection peerGroupId={groupId} weightProfileId={profileId} />
+          <TopicsSignatureSection peerGroupId={groupId} weightProfileId={profileId} profileName={profileName} />
           <QualitySection benchmark={data} periodStart={data.period_start} periodEnd={data.period_end} />
         </>
       )}

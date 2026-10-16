@@ -246,6 +246,7 @@ async def _missing_cached_data(session: AsyncSession, group_id: int, own_ror: st
     per-topic statistics for the current Leiden window."""
     from app.models.peers import PeerTopicCount
     from app.services.quality.comparable import cached_counts_by_ror, current_window
+    from app.services.topics_signature import fresh_topic_counts
 
     rors = set((await session.execute(
         select(PeerGroupMember.ror_id).where(PeerGroupMember.peer_group_id == group_id)
@@ -262,7 +263,7 @@ async def _missing_cached_data(session: AsyncSession, group_id: int, own_ror: st
             PeerTopicCount.ror_id.in_(list(rors)),
             PeerTopicCount.period_start == years[0],
             PeerTopicCount.period_end == years[1],
-            PeerTopicCount.top10_count.is_not(None),
+            fresh_topic_counts(),
         )
     )).scalar_one()
     return with_topics < len(rors)

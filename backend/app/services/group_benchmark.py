@@ -11,6 +11,9 @@ reproduce — no mean/total citations, no confidence intervals):
   - impact: PP(top 1 %), PP(top 10 %) (citation_normalized_percentile), share
     with FWCI ≥ 1, PP(≥ 10 citations), share cited, PP(open access),
     PP(international collaboration), PP(industry collaboration);
+  - volume: the P-type counterparts of the impact indicators — numbers of
+    publications (P, P(FWCI ≥ 1), P(OA), P(top 1 %), …), which favour large
+    institutions where the shares do not;
   - specialization: share of the institution's domain-classified publications
     in the selected domain (not defined on "all domains");
   - quality: estimated grid coefficients and P / PP top 50 / 25 / 10 % in
@@ -37,13 +40,14 @@ from app.services.quality.comparable import (
     DOMAIN_KEY,
     IMPACT_CRITERIA,
     TOTAL_KEY,
+    VOLUME_COUNTS,
     active_categories,
     cached_counts_by_ror,
     category_weights,
     counts_for,
     criteria_terms,
     current_window,
-    percentile_midrank,
+    midrank_percentiles,
     quality_scores,
 )
 from app.services.ror import normalize_ror
@@ -122,76 +126,116 @@ async def get_group_benchmark(
 
     # Values on the selected scope, for every institution with cached counts.
     scoped = {ror: counts_for(c, domain) for ror, c in all_counts.items()}
+    specialization = {
+        ror: (100.0 * rate if (rate := specialization_rate(c, domain)) is not None else None)
+        for ror, c in all_counts.items()
+    } if domain is not None else None
+    scores = score_scope(scoped, specialization, min_publications, profile.axis_weights, sub_weights, terms, weights)
+
+    rows = []
+    for ror in ror_ids:
+        name, country = names.get(ror, (None, None))
+        s = scores.get(ror)
+        rows.append({
+            "ror_id": ror,
+            "name": name,
+            "country_code": country,
+            "is_own": ror == own_ror,
+            "has_data": s is not None,
+            "rank": None,
+            **(s or {
+                "compared": False, "p": None, "impact": {}, "impact_percentiles": {}, "volume": {},
+                "volume_percentiles": {}, "specialization_rate": None, "specialization_percentile": None,
+                "quality": None, "composite_score": None, "breakdown": [],
+            }),
+        })
+
+    ranked = sorted((r for r in rows if r["composite_score"] is not None), key=lambda r: -r["composite_score"])
+    for rank, row in enumerate(ranked, start=1):
+        row["rank"] = rank
+    rows.sort(key=lambda r: (r["rank"] is None, r["rank"] or 0, -(r["p"] or 0)))
+    return {**meta, "institutions_compared": sum(1 for s in scores.values() if s["compared"]), "rows": rows}
+
+
+def score_scope(
+    scoped: dict[str, dict],
+    specialization: dict[str, float | None] | None,
+    min_publications: int,
+    axis_weights: dict[str, float],
+    sub_weights: dict[str, dict[str, float]],
+    terms: list[dict],
+    category_weights: dict[str, float],
+    with_quality_top: bool = True,
+) -> dict[str, dict]:
+    """Indicators, percentiles and global score of every institution on one
+    scope — all domains, one OpenAlex domain, or one topic (topics signature,
+    services/topics_signature.py): {ror: {"compared", "p", "impact",
+    "impact_percentiles", "volume", "volume_percentiles",
+    "specialization_rate", "specialization_percentile", "quality",
+    "composite_score", "breakdown"}}.
+
+    scoped: {ror: counts restricted to the scope} (comparable.py layout);
+    specialization: {ror: specialization rate in %} on the scope, None where
+    the axis does not apply (all domains). Only institutions with at least
+    min_publications publications on the scope are compared: the others keep
+    their values but get no percentile nor score.
+    """
     values: dict[str, dict] = {}
     for ror, c in scoped.items():
         p = int(c.get(TOTAL_KEY, 0))
         values[ror] = {
             "p": p,
             "impact": {key: (100.0 * c.get(cid, 0) / p if p else None) for key, cid in IMPACT_CRITERIA.items()},
-            "specialization": (
-                100.0 * rate if domain is not None and (rate := specialization_rate(all_counts[ror], domain)) is not None
-                else None
-            ),
+            "volume": {key: int(c.get(cid, 0)) for key, cid in VOLUME_COUNTS.items()},
+            "specialization": specialization.get(ror) if specialization is not None else None,
         }
     compared = [ror for ror, v in values.items() if v["p"] >= min_publications]
-    quality = quality_scores({ror: scoped[ror] for ror in compared}, terms, weights)
+    quality = quality_scores({ror: scoped[ror] for ror in compared}, terms, category_weights, with_top=with_quality_top)
 
-    def pct(ror: str, value: float | None, column: list[float]) -> float | None:
-        return percentile_midrank(value, column) if ror in compared and value is not None else None
+    def ranks(get) -> dict[str, float]:
+        return midrank_percentiles({r: x for r in compared if (x := get(values[r])) is not None})
 
-    impact_columns = {
-        key: [values[r]["impact"][key] for r in compared if values[r]["impact"][key] is not None]
-        for key in IMPACT_CRITERIA
-    }
-    specialization_column = [values[r]["specialization"] for r in compared if values[r]["specialization"] is not None]
+    impact_ranks = {key: ranks(lambda v, k=key: v["impact"][k]) for key in IMPACT_CRITERIA}
+    volume_ranks = {key: ranks(lambda v, k=key: v["volume"][k]) for key in VOLUME_COUNTS}
+    specialization_ranks = ranks(lambda v: v["specialization"])
 
-    rows = []
-    for ror in ror_ids:
-        name, country = names.get(ror, (None, None))
-        v = values.get(ror)
-        row = {
-            "ror_id": ror,
-            "name": name,
-            "country_code": country,
-            "is_own": ror == own_ror,
-            "has_data": v is not None,
+    out = {}
+    for ror, v in values.items():
+        entry = {
             "compared": ror in compared,
-            "p": v["p"] if v else None,
-            "impact": {k: (round(x, 2) if x is not None else None) for k, x in v["impact"].items()} if v else {},
+            "p": v["p"],
+            "impact": {k: (round(x, 2) if x is not None else None) for k, x in v["impact"].items()},
             "impact_percentiles": {},
-            "specialization_rate": round(v["specialization"], 2) if v and v["specialization"] is not None else None,
+            "volume": dict(v["volume"]),
+            "volume_percentiles": {},
+            "specialization_rate": round(v["specialization"], 2) if v["specialization"] is not None else None,
             "specialization_percentile": None,
             "quality": quality.get(ror),
             "composite_score": None,
-            "rank": None,
             "breakdown": [],
         }
         if ror in compared:
             impact = [
-                component(key, row["impact"][key], pct(ror, v["impact"][key], impact_columns[key]), "%")
-                for key in IMPACT_CRITERIA
+                component(key, entry["impact"][key], impact_ranks[key].get(ror), "%") for key in IMPACT_CRITERIA
             ]
+            volume = [component(key, v["volume"][key], volume_ranks[key].get(ror)) for key in VOLUME_COUNTS]
             specificity = [component(
-                "taux_specialisation", row["specialization_rate"],
-                pct(ror, v["specialization"], specialization_column), "%",
-            )] if domain is not None else []
+                "taux_specialisation", entry["specialization_rate"], specialization_ranks.get(ror), "%",
+            )] if specialization is not None else []
             breakdown = score_breakdown(
                 {
                     "impact_scientifique": impact,
+                    "volume_publications": volume,
                     "specificite_disciplinaire": specificity,
                     "qualite": quality_components(quality.get(ror)),
                 },
-                profile.axis_weights,
+                axis_weights,
                 sub_weights,
             )
-            row["impact_percentiles"] = {c["key"]: c["percentile"] for c in impact}
-            row["specialization_percentile"] = specificity[0]["percentile"] if specificity else None
-            row["composite_score"] = breakdown["composite_score"]
-            row["breakdown"] = breakdown["axes"]
-        rows.append(row)
-
-    ranked = sorted((r for r in rows if r["composite_score"] is not None), key=lambda r: -r["composite_score"])
-    for rank, row in enumerate(ranked, start=1):
-        row["rank"] = rank
-    rows.sort(key=lambda r: (r["rank"] is None, r["rank"] or 0, -(r["p"] or 0)))
-    return {**meta, "institutions_compared": len(compared), "rows": rows}
+            entry["impact_percentiles"] = {c["key"]: c["percentile"] for c in impact}
+            entry["volume_percentiles"] = {c["key"]: c["percentile"] for c in volume}
+            entry["specialization_percentile"] = specificity[0]["percentile"] if specificity else None
+            entry["composite_score"] = breakdown["composite_score"]
+            entry["breakdown"] = breakdown["axes"]
+        out[ror] = entry
+    return out

@@ -1,5 +1,5 @@
 """Per-institution OpenAlex counts behind the comparison-group benchmark
-(services/group_benchmark.py): impact indicators and quality axis.
+(services/group_benchmark.py): impact and volume indicators and quality axis.
 
 Only the reference institution's works are ingested. For the benchmark, every
 institution (reference included, for a like-for-like comparison) is described
@@ -53,6 +53,7 @@ computed on one scope at a time (all domains, or one OpenAlex domain).
 """
 
 import asyncio
+import bisect
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -124,6 +125,21 @@ IMPACT_CRITERIA: dict[str, str] = {
     "pp_industry_collab": "14.3",
 }
 QUALITY_EXCLUDED = set(IMPACT_CRITERIA.values())
+
+# Benchmark volume indicator → count it reads: the Leiden P-type counterparts
+# of the impact indicators (numbers of publications, not shares), in display
+# order.
+VOLUME_COUNTS: dict[str, str] = {
+    "p": TOTAL_KEY,
+    "p_fwci_1": "107",
+    "p_oa": "4",
+    "p_top_1": "106.1",
+    "p_cited": "65",
+    "p_top_10": "106",
+    "p_10_cits": "69",
+    "p_int_collab": "14.4",
+    "p_industry_collab": "14.3",
+}
 
 # Grid category → weight-profile sub-indicator of the "qualite" axis.
 CATEGORY_KEYS = {
@@ -375,6 +391,19 @@ def percentile_midrank(value: float, values: list[float]) -> float:
     return round(100.0 * (below + 0.5 * (equal - 1)) / max(len(values) - 1, 1), 1) if len(values) > 1 else 50.0
 
 
+def midrank_percentiles(values: dict[str, float]) -> dict[str, float]:
+    """percentile_midrank of every value among all of them, in O(n log n)."""
+    column = sorted(values.values())
+    if len(column) <= 1:
+        return {key: 50.0 for key in values}
+    out = {}
+    for key, value in values.items():
+        below = bisect.bisect_left(column, value - 1e-12)
+        equal = bisect.bisect_right(column, value + 1e-12) - below
+        out[key] = round(100.0 * (below + 0.5 * (equal - 1)) / (len(column) - 1), 1)
+    return out
+
+
 async def current_window(session: AsyncSession) -> tuple[int, int] | None:
     from app.services.openalex_sync import _current_leiden_window
     return await _current_leiden_window(session)
@@ -413,23 +442,27 @@ def active_categories(terms: list[dict]) -> set[str]:
     return {t["category"] for t in terms if abs(_term_log(t)) > 1e-12}
 
 
-def quality_scores(counts_by_ror: dict[str, dict], terms: list[dict], weights: dict[str, float]) -> dict[str, dict]:
+def quality_scores(
+    counts_by_ror: dict[str, dict], terms: list[dict], weights: dict[str, float], with_top: bool = True
+) -> dict[str, dict]:
     """{ror: {"estimates": {sub: coef, "global": coef}, "percentiles": {sub: 0-100 | None},
     "axis_score", "top": {"50"|"25"|"10": {"share", "count"}}}} for the
     institutions given (counts already restricted to one scope). Percentiles
     and top-x % thresholds are taken among them only; inactive categories
-    (active_categories) get no percentile and their weight is redistributed."""
+    (active_categories) get no percentile and their weight is redistributed.
+    with_top=False skips the top-x % shares ("top" left empty), which only the
+    institution-level view displays."""
     active = active_categories(terms)
     active_weight = sum(weights[k] for k in SUB_INDICATORS if k in active)
     estimates = {ror: est for ror, c in counts_by_ror.items() if (est := estimate(c, terms, weights)) is not None}
     sizes = {ror: int(counts_by_ror[ror][TOTAL_KEY]) for ror in estimates}
-    tops = top_shares({ror: log_distribution(counts_by_ror[ror], terms, weights) for ror in estimates}, sizes)
+    tops = top_shares(
+        {ror: log_distribution(counts_by_ror[ror], terms, weights) for ror in estimates}, sizes
+    ) if with_top else {}
+    ranks = {key: midrank_percentiles({ror: e[key] for ror, e in estimates.items()}) for key in SUB_INDICATORS}
     result = {}
     for ror, est in estimates.items():
-        percentiles = {
-            key: percentile_midrank(est[key], [e[key] for e in estimates.values()]) if key in active else None
-            for key in SUB_INDICATORS
-        }
+        percentiles = {key: ranks[key][ror] if key in active else None for key in SUB_INDICATORS}
         axis_score = (
             sum(weights[k] * percentiles[k] for k in SUB_INDICATORS if k in active) / active_weight
             if active_weight > 0 else None

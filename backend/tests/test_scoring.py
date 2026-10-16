@@ -117,3 +117,18 @@ def test_inactive_category_weight_forced_to_zero():
     assert weights["qualite_ex_post"] == 0
     assert weights["qualite_ex_ante"] == pytest.approx(0.4 / 0.9)
     assert sum(weights.values()) == pytest.approx(1.0)
+
+
+def test_volume_counts_mirror_impact_criteria():
+    # Every impact share has its P-type count (same criterion), plus P itself.
+    assert q.VOLUME_COUNTS["p"] == q.TOTAL_KEY
+    assert {k: v for k, v in q.VOLUME_COUNTS.items() if k != "p"} == {
+        "p" + key[2:]: cid for key, cid in q.IMPACT_CRITERIA.items()
+    }
+
+
+def test_midrank_percentiles_match_single_value_version():
+    values = {"a": 1.0, "b": 2.0, "c": 2.0, "d": 5.0, "e": 0.5}
+    expected = {k: q.percentile_midrank(v, list(values.values())) for k, v in values.items()}
+    assert q.midrank_percentiles(values) == expected
+    assert q.midrank_percentiles({"a": 3.0}) == {"a": 50.0}

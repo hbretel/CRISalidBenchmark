@@ -61,10 +61,11 @@ class PeerTopicCount(Base):
     Populated by the peer-cache fill via the OpenAlex group_by API
     (GET /works?filter=authorships.institutions.lineage:{id},publication_year:
     {window}[,extra]&group_by=primary_topic.id), one paginated call per
-    statistic: all works, top 10 % cited (citation_normalized_percentile),
-    open access, international collaboration (countries_distinct_count > 1).
-    These are the topic-level counterparts of the Leiden indicators of the
-    impact axis, used by the topics signature (services/topics_signature.py).
+    statistic: all works, and every criterion of the comparison-group
+    benchmark (services/quality/comparable.py COMPARABLE_FILTERS) — the
+    topic-level counterparts of the institution-level counts, so that the
+    topics signature (services/topics_signature.py) computes the impact,
+    volume, specialization and quality axes exactly as the group benchmark.
     Full publication ingestion for peers stays out of scope (§4.5, option b).
 
     period_start / period_end: Leiden window the counts cover — rows for
@@ -86,9 +87,10 @@ class PeerTopicCount(Base):
     ror_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
     topic_id: Mapped[str] = mapped_column(Text, ForeignKey("topics.id"), nullable=False)
     works_count: Mapped[int] = mapped_column(Integer, default=0)
-    top10_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    oa_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    intl_collab_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # {"_total": n, "<criterion>": n, ...} on this topic — same layout as
+    # peer_quality_counts.counts, without the per-domain breakdown. NULL on
+    # rows from before it (refetched by the next peer-cache fill).
+    counts: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     period_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     period_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(

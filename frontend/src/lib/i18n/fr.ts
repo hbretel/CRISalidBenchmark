@@ -201,12 +201,12 @@ export const fr = {
     method:
       "pour chaque topic OpenAlex (niveau le plus fin, ~4 500 topics) où votre établissement compte au moins {min} " +
       "publications sur {start}–{end}, un score global par topic est calculé pour chaque établissement du groupe " +
-      "ayant lui aussi au moins {min} publications dans ce topic, avec les poids du profil de comparaison : axe " +
-      "Impact (percentiles de la part des publications dans le top 10 % des plus citées — normalisée par domaine et " +
-      "année par OpenAlex —, de la part en accès ouvert et de la part en collaboration internationale) et axe " +
-      "Spécialisation (percentile de la part du topic dans la production de l'établissement). L'axe Qualité n'est " +
-      "pas disponible à l'échelle des topics : son poids est redistribué sur les deux autres (seuil de publications " +
-      "réglable dans Configuration). Un topic est signature " +
+      "ayant lui aussi au moins {min} publications dans ce topic, exactement comme le score global du groupe de " +
+      "comparaison mais restreint aux publications du topic : axes Impact (les 8 parts de publications), Volume " +
+      "(les 9 nombres de publications correspondants), Spécialisation (part du topic dans la production de " +
+      "l'établissement) et Qualité (coefficients de la grille estimés à partir des critères comptables dans " +
+      "OpenAlex), pondérés selon le profil de comparaison (seuil de publications réglable dans Configuration). " +
+      "Cliquez sur un score pour voir son calcul détaillé. Un topic est signature " +
       "si votre établissement y obtient le meilleur score (ex æquo inclus). Les topics signature ne sont pas " +
       "utilisés dans le calcul du score global.",
     computeError: "Erreur lors du calcul des topics signature.",
@@ -224,7 +224,10 @@ export const fr = {
     colTop10: "Top 10 % cités",
     colOa: "Accès ouvert",
     colIntl: "Collab. intl.",
+    colPTop10: "P(top 10 %)",
+    colQuality: "Qualité",
     colScore: "Score (vous)",
+    scoreButtonLabel: "Voir le calcul du score du topic {topic}",
     colRunnerUp: "2e du groupe",
     colMargin: "Écart",
     colCompared: "Étab. comparés",
@@ -274,6 +277,11 @@ export const fr = {
       "PP(top 1 %) = parmi les 10 % / 1 % les plus citées de leur domaine et année (percentile de citations " +
       "normalisé d'OpenAlex), accès ouvert, collaboration internationale. Les autres indicateurs d'impact (FWCI ≥ 1, " +
       "≥ 10 citations, citées, collaboration industrielle) figurent au-dessus et dans le détail de chaque score.",
+    explainVolumeLabel: "Volume —",
+    explainVolume:
+      "nombres de publications (P, P(top 10 %)… comme les indicateurs de type P de Leiden) : contrairement aux parts " +
+      "de l'axe Impact, ils dépendent de la taille de l'établissement. Les autres indicateurs de volume figurent " +
+      "au-dessus et dans le détail de chaque score.",
     explainSpecializationLabel: "Taux de spécialisation —",
     explainSpecialization: "part des publications de l'établissement dans le domaine « {domain} ».",
     explainSpecializationNA:
@@ -288,7 +296,7 @@ export const fr = {
     explainScore:
       "chaque indicateur est converti en percentile parmi les établissements ayant au moins {min} publications, les " +
       "percentiles sont moyennés par axe, puis les axes pondérés selon le profil « {profile} » : Impact {impact} %, " +
-      "Spécialisation {spec} %, Qualité {quality} %. Un axe sans donnée est exclu et les autres renormalisés. " +
+      "Volume {volume} %, Spécialisation {spec} %, Qualité {quality} %. Un axe sans donnée est exclu et les autres renormalisés. " +
       "Cliquez sur un score pour voir son calcul détaillé.",
   },
 
@@ -738,6 +746,7 @@ export const fr = {
 
   axis: {
     impact_scientifique: "Impact en citations",
+    volume_publications: "Volume de publications",
     specificite_disciplinaire: "Taux de spécialisation",
     qualite: "Qualité des publications",
   },
@@ -752,6 +761,14 @@ export const fr = {
     pp_oa: "Accès ouvert",
     pp_int_collab: "Collab. internationale",
     pp_industry_collab: "Collab. industrielle",
+    p_fwci_1: "P(FWCI ≥ 1)",
+    p_oa: "P(accès ouvert)",
+    p_top_1: "P(top 1 %)",
+    p_cited: "P(≥ 1 citation)",
+    p_top_10: "P(top 10 %)",
+    p_10_cits: "P(≥ 10 citations)",
+    p_int_collab: "P(collab. intl.)",
+    p_industry_collab: "P(collab. industrielle)",
     taux_specialisation: "Taux de spécialisation",
     qualite_ex_ante: "Qualité — facteurs ex-ante",
     qualite_intrinseque: "Qualité — facteurs intrinsèques",
@@ -759,6 +776,7 @@ export const fr = {
   },
 
   indicatorDescription: {
+    p: "Nombre de publications de l'établissement sur la période et le domaine sélectionnés (OpenAlex, comptage complet).",
     pp_top_1:
       "Part des publications parmi les 1 % les plus citées de leur domaine et de leur année (percentile de " +
       "citations normalisé d'OpenAlex, critère 106.1 de la grille).",
@@ -774,6 +792,18 @@ export const fr = {
     pp_int_collab: "Part des publications dont les auteurs sont affiliés dans au moins deux pays (critère 14.4).",
     pp_industry_collab:
       "Part des publications co-signées par une entreprise et un établissement académique (critère 14.3).",
+    p_fwci_1: "Nombre de publications dont le FWCI d'OpenAlex atteint au moins la moyenne mondiale (critère 107).",
+    p_oa: "Nombre de publications en accès ouvert (OpenAlex, critère 4).",
+    p_top_1:
+      "Nombre de publications parmi les 1 % les plus citées de leur domaine et de leur année (critère 106.1) — " +
+      "équivalent OpenAlex du P(top 1 %) de Leiden.",
+    p_cited: "Nombre de publications citées au moins une fois (critère 65).",
+    p_top_10:
+      "Nombre de publications parmi les 10 % les plus citées de leur domaine et de leur année (critère 106) — " +
+      "équivalent OpenAlex du P(top 10 %) de Leiden.",
+    p_10_cits: "Nombre de publications citées au moins 10 fois (seuil absolu, non normalisé ; critère 69).",
+    p_int_collab: "Nombre de publications dont les auteurs sont affiliés dans au moins deux pays (critère 14.4).",
+    p_industry_collab: "Nombre de publications co-signées par une entreprise et un établissement académique (critère 14.3).",
     taux_specialisation:
       "Part des publications de l'établissement dans le domaine OpenAlex sélectionné " +
       "dans l'en-tête — valorise les établissements spécialisés dans ce domaine. Percentile au sein du groupe de " +

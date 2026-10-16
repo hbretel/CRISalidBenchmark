@@ -3,8 +3,8 @@
 Strategy (§4.4):
   Rather than ingesting all publications for every peer (prohibitively expensive),
   we call the OpenAlex group_by API which returns publication counts per topic for a
-  given institution in a single paginated response — one call per statistic (all
-  works, top 10 % cited, open access, international collaboration), see
+  given institution in a single paginated response — one call per count (all
+  works and every criterion of the comparison-group benchmark, ~30 calls), see
   services/topics_signature.py. Per-publication data for peers (e.g. raw citation
   counts) would require full publication ingestion for each peer — explicitly
   deferred to v2 (§4.5 option b).

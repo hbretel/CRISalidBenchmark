@@ -15,7 +15,7 @@ weights are renormalized). This is what happens to the specificity axis in
 "Tous les domaines" mode, and to the quality axis before the peer cache is
 filled.
 
-Weights: axis weights and the impact / specificity sub-weights come from the
+Weights: axis weights and the impact / volume / specificity sub-weights come from the
 weight profile; the quality sub-weights (grid categories) are instance-wide
 ("Paramètres d'évaluation qualitative", see services/quality/comparable.py).
 
@@ -32,7 +32,7 @@ from app.services.quality.comparable import SUB_INDICATORS as QUALITY_SUB_INDICA
 
 logger = logging.getLogger(__name__)
 
-AXES = ("impact_scientifique", "specificite_disciplinaire", "qualite")
+AXES = ("impact_scientifique", "volume_publications", "specificite_disciplinaire", "qualite")
 
 
 def component(key: str, value: float | None, percentile: float | None, unit: str = "") -> dict:
@@ -94,24 +94,3 @@ def score_breakdown(
             a["contribution"] = None
     return {"composite_score": round(composite, 1), "axes": axes}
 
-
-def combine_axes(axis_scores: dict[str, float], axis_weights: dict[str, float]) -> float:
-    """Weighted sum of the axis scores, renormalized over the axes that have a
-    score (an axis without data is excluded, not counted as 0)."""
-    present = {axis: w for axis, w in axis_weights.items() if axis in axis_scores}
-    total = sum(present.values())
-    if total <= 0:
-        return 0.0
-    return sum(axis_scores[axis] * w for axis, w in present.items()) / total
-
-
-def _weighted_average(values: dict[str, float], weights: dict[str, float]) -> float:
-    if not weights or not values:
-        return 0.0
-    total_weight = 0.0
-    total = 0.0
-    for key, weight in weights.items():
-        if key in values and values[key] is not None:
-            total += values[key] * weight
-            total_weight += weight
-    return total / total_weight if total_weight > 0 else 0.0

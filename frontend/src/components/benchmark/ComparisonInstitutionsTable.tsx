@@ -54,6 +54,13 @@ export function ComparisonInstitutionsTable({ benchmark, profileName, domain }: 
         sortValue: (r) => r.p,
         render: (r) => (r.p != null ? r.p.toLocaleString("fr-FR") : dash()),
       },
+      {
+        key: "p_top_10",
+        label: t("indicator.p_top_10"),
+        numeric: true,
+        sortValue: (r) => r.volume.p_top_10 ?? null,
+        render: (r) => r.volume.p_top_10?.toLocaleString("fr-FR") ?? dash(),
+      },
       ...TABLE_IMPACT.map(
         (key): Column<GroupBenchmarkRow> => ({
           key,
@@ -130,6 +137,9 @@ export function ComparisonInstitutionsTable({ benchmark, profileName, domain }: 
           })}
         </p>
         <p>
+          <strong>{t("comparisonTable.explainVolumeLabel")}</strong> {t("comparisonTable.explainVolume")}
+        </p>
+        <p>
           <strong>{t("comparisonTable.explainSpecializationLabel")}</strong>{" "}
           {benchmark.specialization_applicable
             ? t("comparisonTable.explainSpecialization", { domain: domainLabel })
@@ -142,6 +152,7 @@ export function ComparisonInstitutionsTable({ benchmark, profileName, domain }: 
           <strong>{t("comparisonTable.explainScoreLabel")}</strong>{" "}
           {t("comparisonTable.explainScore", {
             impact: weightPct(benchmark, "impact_scientifique"),
+            volume: weightPct(benchmark, "volume_publications"),
             spec: weightPct(benchmark, "specificite_disciplinaire"),
             quality: weightPct(benchmark, "qualite"),
             profile: profileName ?? "",

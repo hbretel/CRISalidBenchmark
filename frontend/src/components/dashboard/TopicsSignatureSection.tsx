@@ -1,22 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
+import { Calculator } from "lucide-react";
 import { api } from "@/lib/api";
 import type { SignatureTopic, TopicsSignature } from "@/types/api";
 import { DataTable, type Column } from "@/components/ui/DataTable";
+import { ScoreBreakdownModal } from "@/components/benchmark/ScoreBreakdownModal";
 import { t } from "@/lib/i18n";
 
 interface Props {
   peerGroupId: number;
   weightProfileId: number;
+  profileName?: string;
 }
 
 const fmt = (v: number | null, digits = 1) =>
   v === null ? t("common.dash") : v.toLocaleString("fr-FR", { maximumFractionDigits: digits });
 
 /** Topics where the reference institution ranks first of its group (backend services/topics_signature.py). */
-export function TopicsSignatureSection({ peerGroupId, weightProfileId }: Props) {
+export function TopicsSignatureSection({ peerGroupId, weightProfileId, profileName }: Props) {
+  const [selected, setSelected] = useState<SignatureTopic | null>(null);
   const { data, isLoading, error } = useSWR<TopicsSignature>(
     `/indicators/topics-signature?peer_group_id=${peerGroupId}&weight_profile_id=${weightProfileId}`,
     (url: string) => api.get<TopicsSignature>(url),
@@ -53,29 +57,53 @@ export function TopicsSignatureSection({ peerGroupId, weightProfileId }: Props) 
         key: "own_top10_pct",
         label: t("signature.colTop10"),
         numeric: true,
-        sortValue: (r) => r.own_top10_pct,
-        render: (r) => `${fmt(r.own_top10_pct)} %`,
+        sortValue: (r) => r.own_impact.pp_top_10 ?? null,
+        render: (r) => `${fmt(r.own_impact.pp_top_10 ?? null)} %`,
+      },
+      {
+        key: "own_p_top10",
+        label: t("signature.colPTop10"),
+        numeric: true,
+        sortValue: (r) => r.own_volume.p_top_10 ?? null,
+        render: (r) => r.own_volume.p_top_10?.toLocaleString("fr-FR") ?? t("common.dash"),
       },
       {
         key: "own_oa_pct",
         label: t("signature.colOa"),
         numeric: true,
-        sortValue: (r) => r.own_oa_pct,
-        render: (r) => `${fmt(r.own_oa_pct)} %`,
+        sortValue: (r) => r.own_impact.pp_oa ?? null,
+        render: (r) => `${fmt(r.own_impact.pp_oa ?? null)} %`,
       },
       {
         key: "own_intl_pct",
         label: t("signature.colIntl"),
         numeric: true,
-        sortValue: (r) => r.own_intl_pct,
-        render: (r) => `${fmt(r.own_intl_pct)} %`,
+        sortValue: (r) => r.own_impact.pp_int_collab ?? null,
+        render: (r) => `${fmt(r.own_impact.pp_int_collab ?? null)} %`,
+      },
+      {
+        key: "own_quality",
+        label: t("signature.colQuality"),
+        numeric: true,
+        sortValue: (r) => r.own_quality,
+        render: (r) => (r.own_quality === null ? t("common.dash") : `×${fmt(r.own_quality, 2)}`),
       },
       {
         key: "own_score",
         label: t("signature.colScore"),
         numeric: true,
         sortValue: (r) => r.own_score,
-        render: (r) => <span className="font-semibold text-brand-700">{fmt(r.own_score)}</span>,
+        render: (r) => (
+          <button
+            type="button"
+            onClick={() => setSelected(r)}
+            className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline"
+            aria-label={t("signature.scoreButtonLabel", { topic: r.topic_name })}
+          >
+            <Calculator size={12} className="opacity-60" />
+            {fmt(r.own_score)}
+          </button>
+        ),
       },
       {
         key: "runner_up_score",
@@ -150,6 +178,17 @@ export function TopicsSignatureSection({ peerGroupId, weightProfileId }: Props) 
             />
           )}
         </>
+      )}
+
+      {selected && (
+        <ScoreBreakdownModal
+          open
+          onClose={() => setSelected(null)}
+          institutionName={selected.topic_name}
+          compositeScore={selected.own_score}
+          breakdown={selected.breakdown}
+          profileName={profileName}
+        />
       )}
     </section>
   );

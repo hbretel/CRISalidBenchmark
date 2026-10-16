@@ -27,6 +27,7 @@ function pct(v: number) {
 
 const AXIS_COLORS: Record<string, string> = {
   impact_scientifique: "bg-brand-500",
+  volume_publications: "bg-violet-500",
   specificite_disciplinaire: "bg-amber-400",
   qualite: "bg-emerald-500",
 };

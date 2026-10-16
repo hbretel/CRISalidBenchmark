@@ -40,15 +40,32 @@ export const GROUP_IMPACT_INDICATORS = [
   "pp_industry_collab",
 ] as const;
 
+// Volume indicators of the comparison-group benchmark, in display order: the
+// Leiden P-type counterparts of the impact indicators (numbers of
+// publications — backend services/quality/comparable.py VOLUME_COUNTS).
+export const GROUP_VOLUME_INDICATORS = [
+  "p",
+  "p_fwci_1",
+  "p_oa",
+  "p_top_1",
+  "p_cited",
+  "p_top_10",
+  "p_10_cits",
+  "p_int_collab",
+  "p_industry_collab",
+] as const;
+
 // Default weight profile values
 export const DEFAULT_AXIS_WEIGHTS = {
-  impact_scientifique: 0.4,
-  specificite_disciplinaire: 0.3,
-  qualite: 0.3,
+  impact_scientifique: 0.25,
+  volume_publications: 0.25,
+  specificite_disciplinaire: 0.25,
+  qualite: 0.25,
 };
 
 export const DEFAULT_SUB_WEIGHTS = {
   impact_scientifique: Object.fromEntries(GROUP_IMPACT_INDICATORS.map((k) => [k, 1 / GROUP_IMPACT_INDICATORS.length])),
+  volume_publications: Object.fromEntries(GROUP_VOLUME_INDICATORS.map((k) => [k, 1 / GROUP_VOLUME_INDICATORS.length])),
   // Single indicator: share of the institution's publications in the OpenAlex
   // domain selected in the header (backend services/group_benchmark.py).
   specificite_disciplinaire: {
