@@ -3,6 +3,7 @@
 import type { LineageInfo, ValidateResponse } from "@/types/api";
 import { CheckCircle, AlertTriangle, Building2 } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { t } from "@/lib/i18n";
 
 interface Props {
   data: ValidateResponse;
@@ -37,7 +38,7 @@ export function LineageConfirm({
       {/* Institution name field */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Nom d'affichage de l'établissement
+          {t("lineageConfirm.nameLabel")}
         </label>
         <input
           type="text"
@@ -46,7 +47,7 @@ export function LineageConfirm({
           className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <p className="text-xs text-gray-500 mt-1">
-          Pré-rempli depuis OpenAlex — modifiable.
+          {t("lineageConfirm.nameHint")}
         </p>
       </div>
 
@@ -54,9 +55,9 @@ export function LineageConfirm({
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-sm font-medium text-gray-700">
-            Périmètre institutionnel (lineage ROR){" "}
+            {t("lineageConfirm.perimeterLabel")}
           </span>
-          <InfoTooltip text="Le périmètre d'ingestion inclut l'établissement configuré et ses structures 'enfants' (ex. composantes d'une université fédérale). Ces structures sont détectées à partir du champ associated_institutions d'OpenAlex (relation 'child'), pas du seul champ lineage — pour de nombreux établissements français, lineage revient vide au-delà de l'établissement lui-même alors que associated_institutions liste bien les composantes réelles. Note méthodologique : ce périmètre reste une curation OpenAlex, pas une hiérarchie ROR officielle, et peut différer de celui retenu par le Leiden Ranking (voir §4.1 de la spécification)." />
+          <InfoTooltip text={t("lineageConfirm.perimeterTooltip")} />
         </div>
 
         {hasChildren ? (
@@ -64,10 +65,8 @@ export function LineageConfirm({
             <div className="flex items-start gap-2">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>
-                <strong>Établissement fédéral/fusionné détecté :</strong> l'ingestion couvrira{" "}
-                {data.lineage.length} structures. Vérifiez que la liste ci-dessous est correcte
-                avant de continuer. Les données ROR pour le système français peuvent être
-                incomplètes (certaines composantes manquantes ou incluses par erreur).
+                <strong>{t("lineageConfirm.federatedDetected")}</strong>
+                {t("lineageConfirm.federatedBody", { count: data.lineage.length })}
               </span>
             </div>
           </div>
@@ -75,10 +74,7 @@ export function LineageConfirm({
           <div className="bg-green-50 border border-green-200 rounded p-3 mb-3 text-xs text-green-800">
             <div className="flex items-start gap-2">
               <CheckCircle size={14} className="mt-0.5 shrink-0" />
-              <span>
-                Aucune structure enfant détectée (ni via lineage, ni via associated_institutions).
-                L'ingestion couvrira l'établissement seul.
-              </span>
+              <span>{t("lineageConfirm.noChildren")}</span>
             </div>
           </div>
         )}
@@ -95,13 +91,13 @@ export function LineageConfirm({
                   {item.display_name}
                   {i === 0 && (
                     <span className="ml-2 text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded">
-                      établissement principal
+                      {t("lineageConfirm.mainInstitutionBadge")}
                     </span>
                   )}
                 </div>
                 <div className="text-xs text-gray-400">
                   OpenAlex: {item.openalex_id}
-                  {item.ror_id && ` · ROR: ${item.ror_id}`}
+                  {item.ror_id && t("lineageConfirm.rorSuffix", { ror: item.ror_id })}
                 </div>
               </div>
             </div>
@@ -109,8 +105,7 @@ export function LineageConfirm({
         </div>
 
         <p className="text-xs text-gray-500 mt-2">
-          En v1, le périmètre ne peut pas être modifié manuellement. Si une structure est
-          manquante ou incorrecte, signalez-le à l'équipe OpenAlex/ROR ou documentez l'écart.
+          {t("lineageConfirm.manualEditNote")}
         </p>
       </div>
 
@@ -120,14 +115,14 @@ export function LineageConfirm({
           onClick={onBack}
           className="px-4 py-2 text-sm border rounded text-gray-600 hover:bg-gray-50"
         >
-          Retour
+          {t("lineageConfirm.back")}
         </button>
         <button
           type="button"
           onClick={onConfirm}
           className="flex-1 py-2 px-4 bg-brand-600 text-white rounded text-sm font-medium hover:bg-brand-700"
         >
-          Confirmer et enregistrer
+          {t("lineageConfirm.confirm")}
         </button>
       </div>
     </div>

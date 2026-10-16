@@ -1,5 +1,7 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+
 interface Props {
   percentile: number | null;
   label?: string;
@@ -15,7 +17,7 @@ export function PercentileGauge({ percentile, label, size = "md" }: Props) {
   if (percentile === null) {
     return (
       <span className="text-xs text-gray-400 italic">
-        Percentile non calculable (données OpenAlex uniquement pour cet établissement)
+        {t("percentileGauge.notComputable")}
       </span>
     );
   }
@@ -35,7 +37,7 @@ export function PercentileGauge({ percentile, label, size = "md" }: Props) {
       {label && (
         <div className="flex justify-between text-xs text-gray-500 mb-1">
           <span>{label}</span>
-          <span className="font-semibold text-gray-700">{percentile}e percentile</span>
+          <span className="font-semibold text-gray-700">{t("percentileGauge.nth", { percentile })}</span>
         </div>
       )}
       <div className={`relative w-full ${barH} bg-gray-200 rounded-full overflow-hidden`}>

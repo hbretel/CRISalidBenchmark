@@ -33,6 +33,8 @@ from app.models.instance_config import InstanceConfig
 from app.models.peers import PeerGroup, PeerGroupMember, PeerTopicCount
 from app.services.openalex_client import OpenAlexClient
 from app.services.institution_resolver import resolve_ror
+from app.services.quality.comparable import current_window, ensure_counts
+from app.services.ror import normalize_ror
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,10 @@ async def fill_cache_for_group(peer_group_id: int) -> CacheFillProgress:
     when complete. For large groups: runs as a background asyncio task, returns
     immediately with progress object that callers can poll.
     """
-    SYNC_THRESHOLD = 20
+    # 0: always in the background — with the quality-axis counts (~30 OpenAlex
+    # count queries per institution) even a small group no longer fits in one
+    # HTTP request. The frontend panel polls the progress.
+    SYNC_THRESHOLD = 0
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -85,14 +90,26 @@ async def _do_fill(
     config: InstanceConfig,
     progress: CacheFillProgress,
 ) -> None:
+    # Same pass also fills the quality-axis counts (services/quality/comparable.py)
+    # for every member and for the reference institution itself.
+    async with AsyncSessionLocal() as session:
+        years = await current_window(session)
     async with OpenAlexClient(config.openalex_api_key, config.contact_email) as client:
+        own_ror = normalize_ror(config.ror_id)
+        if years:
+            await ensure_counts(client, config.openalex_institution_id, own_ror, years)
         for member in members:
             try:
                 await _fill_one_institution(member.ror_id, client)
+                if years:
+                    async with AsyncSessionLocal() as session:
+                        openalex_id = await resolve_ror(member.ror_id, session, client)
+                    if openalex_id:
+                        await ensure_counts(client, openalex_id, member.ror_id, years)
                 progress.done += 1
             except Exception as exc:
                 logger.warning(
-                    "Failed to fetch topic counts for %s: %s", member.ror_id, exc
+                    "Failed to fetch topic/quality counts for %s: %s", member.ror_id, exc
                 )
                 progress.failed += 1
     progress.running = False

@@ -9,6 +9,8 @@ from app.database import get_db
 from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
 from app.models.peers import PeerGroup, PeerGroupMember
+from app.api.indicators import LEIDEN_FIELDS
+from app.services.peer_comparison import get_peer_comparison_table
 from app.services.peer_topic_cache import fill_cache_for_group, get_fill_progress
 
 router = APIRouter(prefix="/peer-groups", tags=["peer-groups"])
@@ -236,6 +238,21 @@ async def list_members(
     ]
 
 
+_quality_refilled: set[int] = set()
+
+
+async def _missing_quality_counts(session: AsyncSession, group_id: int) -> bool:
+    from app.services.quality.comparable import cached_counts_by_ror, current_window
+
+    rors = (await session.execute(
+        select(PeerGroupMember.ror_id).where(PeerGroupMember.peer_group_id == group_id)
+    )).scalars().all()
+    years = await current_window(session)
+    if not years or not rors:
+        return False
+    return len(await cached_counts_by_ror(session, list(rors), years)) < len(set(rors))
+
+
 @router.get("/{group_id}/topic-distribution")
 async def topic_distribution(
     group_id: int,
@@ -251,15 +268,40 @@ async def topic_distribution(
     """
     progress = get_fill_progress(group_id)
     if progress and not progress.running:
-        return {"status": "complete", "progress": {"done": progress.done, "total": progress.total}}
+        # A fill completed before the quality-axis counts existed (or for an
+        # older Leiden window) is re-run once per process; members OpenAlex
+        # cannot resolve would otherwise re-trigger it on every poll.
+        if group_id in _quality_refilled or not await _missing_quality_counts(session, group_id):
+            return {"status": "complete", "progress": {"done": progress.done, "total": progress.total}}
+        _quality_refilled.add(group_id)
     if progress and progress.running:
         return {"status": "in_progress", "progress": {"done": progress.done, "total": progress.total}}
 
-    # Not started yet — kick off
+    # Not started yet (or quality-axis counts missing, e.g. new Leiden window) — kick off
     progress = await fill_cache_for_group(group_id)
     if not progress.running:
         return {"status": "complete", "progress": {"done": progress.done, "total": progress.total}}
     return {"status": "in_progress", "progress": {"done": 0, "total": progress.total}}
+
+
+@router.get("/{group_id}/comparison-table")
+async def comparison_table(
+    group_id: int,
+    weight_profile_id: int = Query(...),
+    core_only: bool = Query(default=True),
+    field: str = Query(default="All sciences"),
+    config: InstanceConfig = Depends(get_config),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    """Every institution in the peer group + the reference institution, with a
+    Leiden-only "global score" comparable across all of them (see
+    services/peer_comparison.py for why the specificity axis is simplified)."""
+    if field not in LEIDEN_FIELDS:
+        raise HTTPException(status_code=400, detail=f"field must be one of {LEIDEN_FIELDS}")
+    try:
+        return await get_peer_comparison_table(session, group_id, weight_profile_id, core_only, field)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/leiden-institutions")

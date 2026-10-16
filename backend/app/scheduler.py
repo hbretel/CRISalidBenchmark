@@ -10,6 +10,7 @@ def setup_scheduler() -> None:
     """Register recurring jobs. Called once at application startup."""
     from app.services.openalex_sync import run_openalex_sync
     from app.services.leiden_sync import check_leiden_update
+    from app.services.quality.pipeline import run_quality_sync
 
     # Nightly OpenAlex sync at 02:00 UTC.
     scheduler.add_job(
@@ -18,6 +19,19 @@ def setup_scheduler() -> None:
         hour=2,
         minute=0,
         id="openalex_nightly",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # Qualitative indicators (evaluation grid), after the OpenAlex sync has
+    # had time to finish. Re-evaluates every work daily (age criteria depend
+    # on the date) but only fetches new or stale per-work sources.
+    scheduler.add_job(
+        run_quality_sync,
+        trigger="cron",
+        hour=4,
+        minute=30,
+        id="quality_nightly",
         replace_existing=True,
         misfire_grace_time=3600,
     )
@@ -34,4 +48,4 @@ def setup_scheduler() -> None:
         misfire_grace_time=3600,
     )
 
-    logger.info("Scheduled jobs registered: openalex_nightly, leiden_check_monthly")
+    logger.info("Scheduled jobs registered: openalex_nightly, quality_nightly, leiden_check_monthly")

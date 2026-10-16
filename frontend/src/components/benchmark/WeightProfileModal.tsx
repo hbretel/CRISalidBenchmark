@@ -3,15 +3,10 @@
 import { useEffect, useReducer, useState } from "react";
 import { ChevronDown, ChevronRight, Lock, Unlock } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import {
-  AXIS_LABELS,
-  DEFAULT_AXIS_WEIGHTS,
-  DEFAULT_SUB_WEIGHTS,
-  INDICATOR_LABELS,
-  SUB_INDICATOR_DESCRIPTIONS,
-} from "@/lib/constants";
+import { DEFAULT_AXIS_WEIGHTS, DEFAULT_SUB_WEIGHTS } from "@/lib/constants";
 import type { WeightProfileResponse } from "@/types/api";
 import { Modal } from "@/components/ui/Modal";
+import { t } from "@/lib/i18n";
 
 interface WeightState {
   axis: Record<string, number>;
@@ -27,13 +22,14 @@ type Action =
   | { type: "TOGGLE_SUB_LOCK"; axis: string; indicator: string }
   | { type: "LOAD"; axis: Record<string, number>; sub: Record<string, Record<string, number>> };
 
+function defaultSubWeights(): Record<string, Record<string, number>> {
+  return Object.fromEntries(Object.entries(DEFAULT_SUB_WEIGHTS).map(([axis, sub]) => [axis, { ...sub }]));
+}
+
 function defaultWeights(): WeightState {
   return {
     axis: { ...DEFAULT_AXIS_WEIGHTS },
-    sub: {
-      impact_scientifique: { ...DEFAULT_SUB_WEIGHTS.impact_scientifique },
-      specificite_disciplinaire: { ...DEFAULT_SUB_WEIGHTS.specificite_disciplinaire },
-    },
+    sub: defaultSubWeights(),
     axisLocked: {},
     subLocked: {},
   };
@@ -124,8 +120,8 @@ function LockButton({ locked, onClick, title }: { locked: boolean; onClick: () =
 function nextDefaultName(existing: WeightProfileResponse[]): string {
   let n = 1;
   const names = new Set(existing.map((p) => p.name));
-  while (names.has(`Profil de comparaison ${n}`)) n++;
-  return `Profil de comparaison ${n}`;
+  while (names.has(t("weightProfileModal.defaultProfileName", { n }))) n++;
+  return t("weightProfileModal.defaultProfileName", { n });
 }
 
 interface Props {
@@ -149,10 +145,7 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
       dispatch({ type: "LOAD", axis: editingProfile.axis_weights, sub: editingProfile.sub_indicator_weights });
       setName(editingProfile.name);
     } else {
-      dispatch({ type: "LOAD", axis: { ...DEFAULT_AXIS_WEIGHTS }, sub: {
-        impact_scientifique: { ...DEFAULT_SUB_WEIGHTS.impact_scientifique },
-        specificite_disciplinaire: { ...DEFAULT_SUB_WEIGHTS.specificite_disciplinaire },
-      } });
+      dispatch({ type: "LOAD", axis: { ...DEFAULT_AXIS_WEIGHTS }, sub: defaultSubWeights() });
       setName(nextDefaultName(existingProfiles));
     }
     setError(null);
@@ -161,7 +154,7 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
 
   async function handleSave() {
     if (!name.trim()) {
-      setError("Le nom du profil ne peut pas être vide.");
+      setError(t("weightProfileModal.nameEmptyError"));
       return;
     }
     setSaving(true);
@@ -174,17 +167,17 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
       onSaved(profile);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Erreur lors de l'enregistrement.");
+      setError(err instanceof ApiError ? err.detail : t("weightProfileModal.saveError"));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={editingProfile ? "Modifier le profil de comparaison" : "Nouveau profil de comparaison"}>
+    <Modal open={open} onClose={onClose} title={editingProfile ? t("weightProfileModal.editTitle") : t("weightProfileModal.newTitle")}>
       <div className="space-y-5">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Nom du profil</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{t("weightProfileModal.nameLabel")}</label>
           <input
             type="text"
             value={name}
@@ -200,9 +193,9 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
                 <LockButton
                   locked={!!weights.axisLocked[axis]}
                   onClick={() => dispatch({ type: "TOGGLE_AXIS_LOCK", axis })}
-                  title={weights.axisLocked[axis] ? "Déverrouiller ce poids" : "Verrouiller ce poids"}
+                  title={weights.axisLocked[axis] ? t("weightProfileModal.unlock") : t("weightProfileModal.lock")}
                 />
-                {AXIS_LABELS[axis] ?? axis}
+                {t(`axis.${axis}`)}
               </span>
               <span className="text-brand-700 font-bold">{pct(value)} %</span>
             </div>
@@ -222,7 +215,7 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
               className="mt-3 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
             >
               {expanded[axis] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              Indicateurs avancés
+              {t("weightProfileModal.advancedIndicators")}
             </button>
 
             {expanded[axis] && (
@@ -234,9 +227,9 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
                         <LockButton
                           locked={!!weights.subLocked[axis]?.[indicator]}
                           onClick={() => dispatch({ type: "TOGGLE_SUB_LOCK", axis, indicator })}
-                          title={weights.subLocked[axis]?.[indicator] ? "Déverrouiller ce poids" : "Verrouiller ce poids"}
+                          title={weights.subLocked[axis]?.[indicator] ? t("weightProfileModal.unlock") : t("weightProfileModal.lock")}
                         />
-                        {INDICATOR_LABELS[indicator] ?? indicator}
+                        {t(`indicator.${indicator}`)}
                       </span>
                       <span className="text-brand-700 font-semibold">{pct(subValue)} %</span>
                     </div>
@@ -252,7 +245,7 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
                       className="w-full accent-brand-600 disabled:opacity-40"
                     />
                     <p className="text-xs text-gray-400 mt-1">
-                      {SUB_INDICATOR_DESCRIPTIONS[indicator] ?? ""}
+                      {t(`indicatorDescription.${indicator}`)}
                     </p>
                   </div>
                 ))}
@@ -269,7 +262,7 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
             onClick={onClose}
             className="px-4 py-2 text-sm border rounded text-gray-600 hover:bg-gray-50"
           >
-            Annuler
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -277,7 +270,7 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
             disabled={saving}
             className="flex-1 py-2 px-4 bg-brand-600 text-white rounded text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
           >
-            {saving ? "Enregistrement…" : "Sauvegarder le profil"}
+            {saving ? t("common.saving") : t("weightProfileModal.saveButton")}
           </button>
         </div>
       </div>

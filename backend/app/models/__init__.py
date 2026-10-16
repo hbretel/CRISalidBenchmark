@@ -5,6 +5,9 @@ from app.models.leiden import LeidenSnapshot
 from app.models.peers import PeerGroup, PeerGroupMember, PeerTopicCount, InstitutionIdMap
 from app.models.profiles import WeightProfile
 from app.models.sync_log import SyncLog
+from app.models.quality import (
+    WorkQualitySource, WorkQuality, JournalQuality, QualitySnapshot, QualityGridOverride, PeerQualityCount,
+)
 
 __all__ = [
     "Base",
@@ -19,4 +22,10 @@ __all__ = [
     "InstitutionIdMap",
     "WeightProfile",
     "SyncLog",
+    "WorkQualitySource",
+    "WorkQuality",
+    "JournalQuality",
+    "QualitySnapshot",
+    "QualityGridOverride",
+    "PeerQualityCount",
 ]

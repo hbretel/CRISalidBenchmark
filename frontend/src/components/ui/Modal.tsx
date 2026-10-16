@@ -2,6 +2,7 @@
 
 import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
 import { X } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 interface Props {
   open: boolean;
@@ -29,7 +30,7 @@ export function Modal({ open, onClose, title, children, maxWidth = "max-w-lg" }:
               type="button"
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600"
-              aria-label="Fermer"
+              aria-label={t("common.close")}
             >
               <X size={18} />
             </button>

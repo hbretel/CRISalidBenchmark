@@ -5,18 +5,19 @@ import { Treemap, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import type { TopicTreeNode } from "@/types/api";
 import { getCategoricalColor, getContrastTextColor, getShade } from "@/lib/topicColors";
+import { t } from "@/lib/i18n";
 
 interface Props {
   data: TopicTreeNode[]; // root: Domains
   totalWorks: number;
 }
 
-const LEVEL_HINT = [
-  "Cliquez sur un domaine pour explorer ses fields OpenAlex.",
-  "Cliquez sur un field pour explorer ses subfields.",
-  "Cliquez sur un subfield pour explorer ses topics.",
-  "Niveau le plus fin de la taxonomie OpenAlex (topics).",
-];
+const LEVEL_HINT_KEYS = [
+  "treemap.hintDomain",
+  "treemap.hintField",
+  "treemap.hintSubfield",
+  "treemap.hintTopic",
+] as const;
 
 function truncate(name: string, maxWidthPx: number, fontSize: number): string {
   const approxCharWidth = fontSize * 0.56;
@@ -75,7 +76,7 @@ export function ThematicTreemap({ data, totalWorks }: Props) {
     const canDrill = Array.isArray(children) && children.length > 0;
     const showLabel = width > 44 && height > 24;
     const showCount = showLabel && height > 42;
-    const nounPub = value > 1 ? "publications" : "publication";
+    const nounPub = value > 1 ? t("treemap.publicationPlural") : t("treemap.publicationSingular");
 
     return (
       <g
@@ -83,7 +84,7 @@ export function ThematicTreemap({ data, totalWorks }: Props) {
         style={{ cursor: canDrill ? "pointer" : "default" }}
       >
         <rect x={x} y={y} width={width} height={height} fill={fill} stroke="#fff" strokeWidth={1.5} rx={2} />
-        <title>{`${name} — ${value.toLocaleString("fr-FR")} ${nounPub}${canDrill ? " (cliquer pour explorer)" : ""}`}</title>
+        <title>{`${name} — ${value.toLocaleString("fr-FR")} ${nounPub}${canDrill ? t("treemap.clickToExplore") : ""}`}</title>
         {showLabel && (
           <text x={x + 6} y={y + 16} fontSize={11} fontWeight={600} fill={textColor} style={{ pointerEvents: "none" }}>
             {truncate(name, width, 11)}
@@ -105,7 +106,7 @@ export function ThematicTreemap({ data, totalWorks }: Props) {
           onClick={() => setPath([])}
           className={path.length === 0 ? "font-semibold text-gray-800" : "hover:text-brand-600"}
         >
-          Tous les domaines
+          {t("treemap.allDomains")}
         </button>
         {path.map((segment, i) => (
           <span key={segment} className="flex items-center gap-1">
@@ -119,7 +120,7 @@ export function ThematicTreemap({ data, totalWorks }: Props) {
           </span>
         ))}
       </div>
-      <p className="text-xs text-gray-400 mb-2">{LEVEL_HINT[Math.min(path.length, 3)]}</p>
+      <p className="text-xs text-gray-400 mb-2">{t(LEVEL_HINT_KEYS[Math.min(path.length, 3)])}</p>
 
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
@@ -128,7 +129,7 @@ export function ThematicTreemap({ data, totalWorks }: Props) {
         </ResponsiveContainer>
       </div>
       <p className="text-xs text-gray-400 mt-2">
-        {totalWorks.toLocaleString("fr-FR")} publications analysées (corpus complet)
+        {t("treemap.analysedFooter", { count: totalWorks.toLocaleString("fr-FR") })}
       </p>
     </div>
   );

@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.instance_config import InstanceConfig
 from app.services.leiden_sync import import_leiden_xlsx
 from app.services.openalex_sync import run_openalex_sync
+from app.services.quality.pipeline import is_running as quality_is_running, run_quality_sync
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -30,6 +31,17 @@ async def trigger_openalex_sync(
     """Trigger the nightly OpenAlex sync immediately (runs in the background)."""
     asyncio.create_task(run_openalex_sync())
     return {"message": "OpenAlex sync started in the background. Check /sync/status for progress."}
+
+
+@router.post("/sync/quality")
+async def trigger_quality_sync(
+    config: InstanceConfig = Depends(get_config),
+) -> dict:
+    """Run the qualitative-indicators job (evaluation grid) now, in the background."""
+    if quality_is_running():
+        raise HTTPException(status_code=409, detail="Qualitative indicators job already running")
+    asyncio.create_task(run_quality_sync())
+    return {"message": "Qualitative indicators job started in the background. Check /sync/status for progress."}
 
 
 @router.post("/sync/leiden")

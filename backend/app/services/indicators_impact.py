@@ -183,9 +183,12 @@ async def get_impact_indicators(
     headline_lb = round(raw_lb * 100, 2) if raw_lb is not None else None
     headline_ub = round(raw_ub * 100, 2) if raw_ub is not None else None
 
-    mncs_value = own_leiden.mncs if (own_leiden and core_only) else None
-    mncs_lb = own_leiden.mncs_lb if (own_leiden and core_only) else None
-    mncs_ub = own_leiden.mncs_ub if (own_leiden and core_only) else None
+    def _round2(v: float | None) -> float | None:
+        return round(v, 2) if v is not None else None
+
+    mncs_value = _round2(own_leiden.mncs) if (own_leiden and core_only) else None
+    mncs_lb = _round2(own_leiden.mncs_lb) if (own_leiden and core_only) else None
+    mncs_ub = _round2(own_leiden.mncs_ub) if (own_leiden and core_only) else None
 
     peer_pp_int_collab = [p.pp_int_collab for p in peer_leiden if p.pp_int_collab is not None]
     peer_pp_oa = [p.pp_oa for p in peer_leiden if p.pp_oa is not None]

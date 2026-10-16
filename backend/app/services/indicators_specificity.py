@@ -216,7 +216,7 @@ async def get_specificity_indicators(
             ),
         },
         "topics_signature": {
-            "items": signature_topics[:50],  # cap at 50 for UI
+            "items": signature_topics[:10],  # limit to the 10 most specific
             "threshold": SIGNATURE_THRESHOLD,
             "peer_cache_populated": cache_populated,
             "description": (

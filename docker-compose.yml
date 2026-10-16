@@ -14,6 +14,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   backend:
     build:
@@ -23,6 +24,12 @@ services:
       DATABASE_URL: postgresql+asyncpg://crisalid:${POSTGRES_PASSWORD:-devpassword}@db:5432/crisalid_benchmark
       ENVIRONMENT: ${ENVIRONMENT:-development}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-prod}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      NCBI_API_KEY: ${NCBI_API_KEY:-}
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-}
+      VLLM_MODEL: ${VLLM_MODEL:-}
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -58,6 +65,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # No restart policy: unlike the app's own services, Adminer is a manual,
+    # on-demand DB inspection tool — it shouldn't come back up unattended
+    # after a crash or host reboot (an unauthenticated DB UI on 8080), and it
+    # isn't required for the app itself to run. Start it explicitly when needed.
+    restart: "no"
 
 volumes:
   postgres_data:

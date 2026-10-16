@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { SignatureTopic } from "@/types/api";
+import { t } from "@/lib/i18n";
 
 type SortKey = "topic_name" | "own_publication_count" | "own_share_permille" | "peer_avg_share_permille" | "ratio";
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: "topic_name", label: "Nom du Topic" },
-  { key: "own_publication_count", label: "Nb. publications établissement", numeric: true },
-  { key: "own_share_permille", label: "Part établissement (‰)", numeric: true },
-  { key: "peer_avg_share_permille", label: "Moyenne groupe de comparaison (‰)", numeric: true },
-  { key: "ratio", label: "Taux de spécialisation", numeric: true },
+  { key: "topic_name", label: t("topicsSignatureTable.colName") },
+  { key: "own_publication_count", label: t("topicsSignatureTable.colOwnCount"), numeric: true },
+  { key: "own_share_permille", label: t("topicsSignatureTable.colOwnShare"), numeric: true },
+  { key: "peer_avg_share_permille", label: t("topicsSignatureTable.colPeerShare"), numeric: true },
+  { key: "ratio", label: t("topicsSignatureTable.colRatio"), numeric: true },
 ];
 
 export function TopicsSignatureTable({ items }: { items: SignatureTopic[] }) {

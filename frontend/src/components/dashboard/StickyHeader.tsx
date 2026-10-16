@@ -2,6 +2,8 @@
 
 import { Switch } from "@/components/ui/Switch";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { LEIDEN_DOMAINS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
 import type { PeerGroupSummary, WeightProfileResponse } from "@/types/api";
 
 interface Props {
@@ -13,6 +15,8 @@ interface Props {
   leidenDecileLabel: string | null;
   coreOnly: boolean;
   onCoreOnlyChange: (v: boolean) => void;
+  domain: string;
+  onDomainChange: (field: string) => void;
   profiles: WeightProfileResponse[] | undefined;
   currentProfileId: number | null;
   onProfileChange: (id: number) => void;
@@ -20,14 +24,6 @@ interface Props {
   currentGroupId: number | null;
   onGroupChange: (id: number) => void;
 }
-
-const CORE_TOOLTIP =
-  "Les « publications core » approximent la définition Leiden : source dans la liste CWTS Core " +
-  "(~36 000 revues), type article/revue/chapitre d'ouvrage, langue anglaise, non rétracté. " +
-  "Activé par défaut pour rester cohérent avec les indicateurs Leiden calculés sur ce sous-ensemble. " +
-  "Désactivé, l'indicateur de citation vedette change de nature : il devient le pourcentage de " +
-  "publications ayant reçu au moins 10 citations (seuil absolu, non normalisé par domaine), et non " +
-  "plus un simple élargissement du même chiffre.";
 
 export function StickyHeader({
   institutionName,
@@ -38,6 +34,8 @@ export function StickyHeader({
   leidenDecileLabel,
   coreOnly,
   onCoreOnlyChange,
+  domain,
+  onDomainChange,
   profiles,
   currentProfileId,
   onProfileChange,
@@ -45,7 +43,7 @@ export function StickyHeader({
   currentGroupId,
   onGroupChange,
 }: Props) {
-  const period = periodStart && periodEnd ? `${periodStart}–${periodEnd}` : "—";
+  const period = periodStart && periodEnd ? `${periodStart}–${periodEnd}` : t("common.dash");
 
   return (
     <div className="sticky top-0 z-30 -mx-6 -mt-6 px-6 pt-4 pb-3 mb-6 bg-white/95 backdrop-blur border-b">
@@ -64,7 +62,7 @@ export function StickyHeader({
           {leidenDecileLabel && (
             <>
               <span className="text-gray-300">·</span>
-              <span className="text-brand-600" title="Décile Leiden (nombre de publications) d'appartenance">
+              <span className="text-brand-600" title={t("header.decileTooltip")}>
                 {leidenDecileLabel}
               </span>
             </>
@@ -74,18 +72,34 @@ export function StickyHeader({
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div className="flex items-center gap-1.5">
-          <Switch checked={coreOnly} onChange={onCoreOnlyChange} label="Publications core uniquement" />
-          <InfoTooltip text={CORE_TOOLTIP} />
+          <Switch checked={coreOnly} onChange={onCoreOnlyChange} label={t("header.corePublicationsOnly")} />
+          <InfoTooltip text={t("header.coreTooltip")} />
         </div>
 
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-gray-500">Profil de comparaison</label>
+          <label className="text-xs text-gray-500 flex items-center gap-1">
+            {t("header.domainLabel")}
+            <InfoTooltip text={t("header.domainTooltip")} />
+          </label>
+          <select
+            className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            value={domain}
+            onChange={(e) => onDomainChange(e.target.value)}
+          >
+            {LEIDEN_DOMAINS.map((d) => (
+              <option key={d.value} value={d.value}>{t(`leidenDomain.${d.value}`)}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-gray-500">{t("header.profileLabel")}</label>
           <select
             className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={currentProfileId ?? ""}
             onChange={(e) => onProfileChange(Number(e.target.value))}
           >
-            {!profiles && <option>Chargement…</option>}
+            {!profiles && <option>{t("common.loading")}</option>}
             {profiles?.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -93,13 +107,13 @@ export function StickyHeader({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <label className="text-xs text-gray-500">Groupe de comparaison</label>
+          <label className="text-xs text-gray-500">{t("header.groupLabel")}</label>
           <select
             className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={currentGroupId ?? ""}
             onChange={(e) => onGroupChange(Number(e.target.value))}
           >
-            {!groups && <option>Chargement…</option>}
+            {!groups && <option>{t("common.loading")}</option>}
             {groups?.map((g) => (
               <option key={g.id} value={g.id}>{g.name} ({g.member_count})</option>
             ))}

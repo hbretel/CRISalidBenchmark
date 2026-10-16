@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { AXIS_LABELS } from "@/lib/constants";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { WeightProfileModal } from "@/components/benchmark/WeightProfileModal";
 import { PeerGroupModal } from "@/components/benchmark/PeerGroupModal";
@@ -14,25 +13,36 @@ import { usePeerGroups, getDefaultPeerGroupId } from "@/hooks/usePeerGroups";
 import { useCurrentPeerGroupId, useCurrentWeightProfileId } from "@/hooks/useCurrentSelection";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import type { PeerGroupSummary, WeightProfileResponse } from "@/types/api";
+import { t } from "@/lib/i18n";
 
-const TYPE_LABELS: Record<string, string> = {
-  geographic: "Géographique",
-  size_bracket: "Tranche de taille",
-  custom: "Personnalisé",
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  geographic: "parametresBenchmark.typeGeographic",
+  size_bracket: "parametresBenchmark.typeSizeBracket",
+  custom: "parametresBenchmark.typeCustom",
 };
 
 function pct(v: number) {
   return Math.round(v * 100);
 }
 
-/** Mini stacked bar showing the impact / specialisation split of a profile. */
+const AXIS_COLORS: Record<string, string> = {
+  impact_scientifique: "bg-brand-500",
+  specificite_disciplinaire: "bg-amber-400",
+  qualite: "bg-emerald-500",
+};
+
+/** Mini stacked bar showing how a profile splits its weight across axes. */
 function ProfileThumbnail({ profile }: { profile: WeightProfileResponse }) {
-  const impact = pct(profile.axis_weights.impact_scientifique ?? 0);
-  const specificite = 100 - impact;
   return (
     <div className="w-full h-2 rounded-full overflow-hidden flex bg-gray-100">
-      <div className="bg-brand-500 h-full" style={{ width: `${impact}%` }} title={`${AXIS_LABELS.impact_scientifique} ${impact}%`} />
-      <div className="bg-amber-400 h-full" style={{ width: `${specificite}%` }} title={`${AXIS_LABELS.specificite_disciplinaire} ${specificite}%`} />
+      {Object.entries(profile.axis_weights).map(([axis, weight]) => (
+        <div
+          key={axis}
+          className={`${AXIS_COLORS[axis] ?? "bg-gray-400"} h-full`}
+          style={{ width: `${pct(weight)}%` }}
+          title={`${t(`axis.${axis}`)} ${pct(weight)}%`}
+        />
+      ))}
     </div>
   );
 }
@@ -66,53 +76,54 @@ export default function ParametresBenchmarkPage() {
   const predefinedGroups = groups?.filter((g) => g.type !== "custom") ?? [];
 
   async function handleDeleteProfile(id: number) {
-    if (!confirm("Supprimer ce profil de comparaison ?")) return;
+    if (!confirm(t("parametresBenchmark.deleteProfileConfirm"))) return;
     setProfileError(null);
     try {
       await api.delete(`/weight-profiles/${id}`);
       mutateProfiles();
     } catch (err) {
-      setProfileError(err instanceof ApiError ? err.detail : "Erreur lors de la suppression.");
+      setProfileError(err instanceof ApiError ? err.detail : t("parametresBenchmark.deleteProfileError"));
     }
   }
 
   async function handleDeleteGroup(id: number) {
-    if (!confirm("Supprimer ce groupe de comparaison ?")) return;
+    if (!confirm(t("parametresBenchmark.deleteGroupConfirm"))) return;
     setGroupError(null);
     try {
       await api.delete(`/peer-groups/${id}`);
       mutateGroups();
     } catch (err) {
-      setGroupError(err instanceof ApiError ? err.detail : "Erreur lors de la suppression.");
+      setGroupError(err instanceof ApiError ? err.detail : t("parametresBenchmark.deleteGroupError"));
     }
   }
 
   return (
     <div className="max-w-3xl">
       <div className="mb-8">
-        <h1 className="text-xl font-bold text-gray-900">Paramètres du benchmark</h1>
+        <h1 className="text-xl font-bold text-gray-900">{t("parametresBenchmark.title")}</h1>
       </div>
 
       {/* ── Profils de comparaison ─────────────────────────────────────── */}
       <section className="mb-10">
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Profils de comparaison</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Définissez sous quels angles vous souhaitez comparer votre établissement. Choisissez ou
-          créez des profils de comparaison en attribuant des poids aux indicateurs disponibles.
-        </p>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">{t("parametresBenchmark.profilesTitle")}</h2>
+        <p className="text-sm text-gray-500 mb-4">{t("parametresBenchmark.profilesIntro")}</p>
 
         {currentProfile && (
           <div className="bg-white border rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">
-                Profil actuel : <span className="text-brand-700">{currentProfile.name}</span>
+                {t("parametresBenchmark.currentProfile")}<span className="text-brand-700">{currentProfile.name}</span>
               </span>
-              <InfoTooltip text="Le profil de comparaison actuel pondère les indicateurs de l'axe impact en citations et de l'axe domaines de spécialité pour le score composite. Il peut aussi être changé depuis l'en-tête du tableau de bord." />
+              <InfoTooltip text={t("parametresBenchmark.currentProfileTooltip")} />
             </div>
             <ProfileThumbnail profile={currentProfile} />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>{AXIS_LABELS.impact_scientifique}</span>
-              <span>{AXIS_LABELS.specificite_disciplinaire}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mt-1.5">
+              {Object.entries(currentProfile.axis_weights).map(([axis, weight]) => (
+                <span key={axis} className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${AXIS_COLORS[axis] ?? "bg-gray-400"}`} />
+                  {t(`axis.${axis}`)} {pct(weight)} %
+                </span>
+              ))}
             </div>
           </div>
         )}
@@ -120,7 +131,7 @@ export default function ParametresBenchmarkPage() {
         {profileError && <p className="text-xs text-red-600 mb-2">{profileError}</p>}
 
         <div className="bg-white border rounded-lg divide-y">
-          {!profiles && <p className="text-xs text-gray-400 p-4">Chargement…</p>}
+          {!profiles && <p className="text-xs text-gray-400 p-4">{t("common.loading")}</p>}
           {profiles?.map((p) => (
             <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
               <label className="flex items-center gap-2 text-sm cursor-pointer flex-1">
@@ -135,7 +146,7 @@ export default function ParametresBenchmarkPage() {
                   {p.name}
                 </span>
                 {p.is_default && (
-                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">par défaut</span>
+                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{t("parametresBenchmark.defaultBadge")}</span>
                 )}
               </label>
               <div className="flex items-center gap-1">
@@ -143,14 +154,14 @@ export default function ParametresBenchmarkPage() {
                   <>
                     <button
                       onClick={() => { setEditingProfile(p); setProfileModalOpen(true); }}
-                      title="Modifier"
+                      title={t("common.edit")}
                       className="p-1.5 text-gray-500 hover:text-brand-600 rounded"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => handleDeleteProfile(p.id)}
-                      title="Supprimer"
+                      title={t("common.delete")}
                       className="p-1.5 text-gray-500 hover:text-red-600 rounded"
                     >
                       <Trash2 size={14} />
@@ -166,29 +177,26 @@ export default function ParametresBenchmarkPage() {
           onClick={() => { setEditingProfile(null); setProfileModalOpen(true); }}
           className="mt-3 flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
         >
-          <Plus size={15} /> Nouveau profil de comparaison
+          <Plus size={15} /> {t("parametresBenchmark.newProfile")}
         </button>
       </section>
 
       {/* ── Groupes de comparaison ─────────────────────────────────────── */}
       <section>
-        <h2 className="text-base font-semibold text-gray-800 mb-1">Groupes de comparaison</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Définissez avec quel groupe vous souhaitez comparer votre établissement. Choisissez parmi
-          les groupes disponibles ou créez vos propres groupes.
-        </p>
+        <h2 className="text-base font-semibold text-gray-800 mb-1">{t("parametresBenchmark.groupsTitle")}</h2>
+        <p className="text-sm text-gray-500 mb-4">{t("parametresBenchmark.groupsIntro")}</p>
 
         {currentGroup && (
           <div className="bg-white border rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium text-gray-700">
-                Groupe actuel : <span className="text-brand-700">{currentGroup.name}</span>
+                {t("parametresBenchmark.currentGroup")}<span className="text-brand-700">{currentGroup.name}</span>
               </span>
-              <InfoTooltip text="Le groupe de comparaison actuel sert de référence pour les percentiles affichés sur le tableau de bord. Il peut aussi être changé depuis l'en-tête du tableau de bord." />
+              <InfoTooltip text={t("parametresBenchmark.currentGroupTooltip")} />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Users size={13} />
-              {currentGroup.member_count} établissements
+              {t("parametresBenchmark.memberCount", { count: currentGroup.member_count })}
             </div>
             <PeerTopicCachePanel groupId={currentGroup.id} />
           </div>
@@ -199,14 +207,14 @@ export default function ParametresBenchmarkPage() {
         )}
         {leidenImportRunning && (
           <p className="text-xs text-gray-500 -mt-4 mb-4">
-            Un import Leiden est en cours d&apos;exécution — les groupes de comparaison se rafraîchiront automatiquement.
+            {t("parametresBenchmark.leidenImportRunningNote")}
           </p>
         )}
 
         {groupError && <p className="text-xs text-red-600 mb-2">{groupError}</p>}
 
         <div className="bg-white border rounded-lg divide-y mb-2">
-          {!groups && <p className="text-xs text-gray-400 p-4">Chargement…</p>}
+          {!groups && <p className="text-xs text-gray-400 p-4">{t("common.loading")}</p>}
           {predefinedGroups.map((g) => (
             <GroupRow key={g.id} group={g} current={currentGroupId === g.id} onSelect={() => setCurrentGroupId(g.id)} />
           ))}
@@ -231,7 +239,7 @@ export default function ParametresBenchmarkPage() {
           onClick={() => { setEditingGroup(null); setGroupModalOpen(true); }}
           className="mt-1 flex items-center gap-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
         >
-          <Plus size={15} /> Nouveau groupe de comparaison
+          <Plus size={15} /> {t("parametresBenchmark.newGroup")}
         </button>
       </section>
 
@@ -271,18 +279,18 @@ function GroupRow({
         <input type="radio" name="current-group" checked={current} onChange={onSelect} className="accent-brand-600" />
         <span className={current ? "font-medium text-gray-900" : "text-gray-700"}>{group.name}</span>
         <span className="text-xs text-gray-400">
-          {TYPE_LABELS[group.type] ?? group.type} · {group.member_count}
+          {TYPE_LABEL_KEYS[group.type] ? t(TYPE_LABEL_KEYS[group.type]) : group.type} · {group.member_count}
         </span>
       </label>
       {(onEdit || onDelete) && (
         <div className="flex items-center gap-1">
           {onEdit && (
-            <button onClick={onEdit} title="Modifier" className="p-1.5 text-gray-500 hover:text-brand-600 rounded">
+            <button onClick={onEdit} title={t("common.edit")} className="p-1.5 text-gray-500 hover:text-brand-600 rounded">
               <Pencil size={14} />
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} title="Supprimer" className="p-1.5 text-gray-500 hover:text-red-600 rounded">
+            <button onClick={onDelete} title={t("common.delete")} className="p-1.5 text-gray-500 hover:text-red-600 rounded">
               <Trash2 size={14} />
             </button>
           )}

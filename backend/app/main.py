@@ -5,11 +5,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import config, institution, indicators, peers, profiles, admin
+from app.api import auth, config, institution, indicators, peers, profiles, admin, quality
+from app.middleware.auth_guard import AuthGuardMiddleware
 from app.middleware.setup_guard import SetupGuardMiddleware
 from app.scheduler import scheduler, setup_scheduler
 
 logging.basicConfig(level=logging.INFO)
+# httpx logs every request URL at INFO: too noisy for ~10^3-request syncs, and
+# a credential passed as a query parameter would end up in the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +26,12 @@ async def lifespan(app: FastAPI):
         logger.info("Migrations complete")
     except Exception as exc:
         logger.warning("Migration failed (DB may not be ready): %s", exc)
+
+    # Instance calibration of the evaluation grid (Paramètres d'évaluation qualitative)
+    try:
+        await quality.load_grid_overrides()
+    except Exception as exc:
+        logger.warning("Could not load the grid calibration (DB may not be ready): %s", exc)
 
     # Start background scheduler
     setup_scheduler()
@@ -54,15 +64,20 @@ app.add_middleware(
 )
 
 app.add_middleware(SetupGuardMiddleware)
+# Added last so it's outermost and runs first — unauthenticated requests are
+# redirected to /login before the setup-guard check ever sees them.
+app.add_middleware(AuthGuardMiddleware)
 
 # Routers
 PREFIX = "/api/v1"
+app.include_router(auth.router, prefix=PREFIX)
 app.include_router(config.router, prefix=PREFIX)
 app.include_router(institution.router, prefix=PREFIX)
 app.include_router(indicators.router, prefix=PREFIX)
 app.include_router(peers.router, prefix=PREFIX)
 app.include_router(profiles.router, prefix=PREFIX)
 app.include_router(admin.router, prefix=PREFIX)
+app.include_router(quality.router, prefix=PREFIX)
 
 
 @app.get("/health")

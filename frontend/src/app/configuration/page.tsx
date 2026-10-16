@@ -5,7 +5,9 @@ import { useConfig } from "@/hooks/useConfig";
 import { api, ApiError } from "@/lib/api";
 import type { ConfigResponse } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { QualityJobPanel } from "@/components/setup/QualityJobPanel";
 import { AlertTriangle, Building2, CheckCircle, KeyRound, Mail } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 /**
  * Post-setup configuration management — reachable via the "Configuration"
@@ -20,10 +22,8 @@ export default function ConfigurationPage() {
   return (
     <div className="max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-xl font-bold text-gray-900">Configuration</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Modifiez les paramètres de l&apos;instance. Chaque section s&apos;enregistre indépendamment.
-        </p>
+        <h1 className="text-xl font-bold text-gray-900">{t("configuration.title")}</h1>
+        <p className="text-sm text-gray-500 mt-1">{t("configuration.subtitle")}</p>
       </div>
 
       {config && (
@@ -31,6 +31,7 @@ export default function ConfigurationPage() {
           <InstitutionSection config={config} onSaved={mutate} />
           <ApiKeySection onSaved={mutate} />
           <EmailSection config={config} onSaved={mutate} />
+          <QualityJobPanel />
         </>
       )}
     </div>
@@ -58,7 +59,7 @@ function InstitutionSection({ config, onSaved }: { config: ConfigResponse; onSav
       setSaved(true);
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Erreur lors de la mise à jour.");
+      setError(err instanceof ApiError ? err.detail : t("configuration.genericError"));
     } finally {
       setSaving(false);
     }
@@ -68,15 +69,15 @@ function InstitutionSection({ config, onSaved }: { config: ConfigResponse; onSav
     <section className="bg-white border rounded-lg p-5 mb-4">
       <div className="flex items-center gap-2 mb-1">
         <Building2 size={16} className="text-brand-600" />
-        <h2 className="text-sm font-semibold text-gray-700">Institution de référence</h2>
+        <h2 className="text-sm font-semibold text-gray-700">{t("configuration.institutionTitle")}</h2>
       </div>
       <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
-        {config.institution_name} · ROR {config.ror_id ?? "—"} ·{" "}
-        {config.openalex_lineage_ids.length} structure(s) directement rattachée(s)
-        <InfoTooltip text="Nombre de structures directement rattachées, tel que connu par OpenAlex (associated_institutions). Informatif uniquement : l'ingestion des publications couvre en réalité toute la hiérarchie (structures de toute profondeur), pas seulement ce niveau direct." />
+        {config.institution_name} · ROR {config.ror_id ?? t("common.dash")} ·{" "}
+        {config.openalex_lineage_ids.length} {t("configuration.lineageCount")}
+        <InfoTooltip text={t("configuration.lineageCountTooltip")} />
       </p>
 
-      <label className="block text-xs font-medium text-gray-600 mb-1">ID OpenAlex de l&apos;établissement</label>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{t("configuration.institutionIdLabel")}</label>
       <div className="flex gap-2">
         <input
           type="text"
@@ -89,25 +90,21 @@ function InstitutionSection({ config, onSaved }: { config: ConfigResponse; onSav
           disabled={saving || !changed || !institutionId.trim()}
           className="px-4 py-2 bg-brand-600 text-white text-sm rounded disabled:opacity-50"
         >
-          {saving ? "…" : "Changer"}
+          {saving ? t("configuration.changing") : t("configuration.change")}
         </button>
       </div>
 
       {changed && (
         <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-          <span>
-            Les nouvelles données n&apos;apparaîtront qu&apos;à la prochaine synchronisation automatique
-            (nocturne) — contrairement à la configuration initiale, ce changement ne déclenche pas
-            de synchronisation immédiate.
-          </span>
+          <span>{t("configuration.changeWarning")}</span>
         </div>
       )}
 
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       {saved && (
         <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
-          <CheckCircle size={13} /> Institution mise à jour.
+          <CheckCircle size={13} /> {t("configuration.institutionUpdated")}
         </p>
       )}
     </section>
@@ -131,7 +128,7 @@ function ApiKeySection({ onSaved }: { onSaved: () => void }) {
       setSaved(true);
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Erreur lors de la mise à jour.");
+      setError(err instanceof ApiError ? err.detail : t("configuration.genericError"));
     } finally {
       setSaving(false);
     }
@@ -141,18 +138,18 @@ function ApiKeySection({ onSaved }: { onSaved: () => void }) {
     <section className="bg-white border rounded-lg p-5 mb-4">
       <div className="flex items-center gap-2 mb-1">
         <KeyRound size={16} className="text-brand-600" />
-        <h2 className="text-sm font-semibold text-gray-700">Clé API OpenAlex</h2>
-        <InfoTooltip text="Par sécurité, la clé actuellement enregistrée n'est jamais affichée. Saisissez une nouvelle clé uniquement si vous souhaitez la remplacer." />
+        <h2 className="text-sm font-semibold text-gray-700">{t("configuration.apiKeyTitle")}</h2>
+        <InfoTooltip text={t("configuration.apiKeyTooltip")} />
       </div>
-      <p className="text-xs text-gray-500 mb-3">Clé actuelle : enregistrée (masquée)</p>
+      <p className="text-xs text-gray-500 mb-3">{t("configuration.apiKeyCurrent")}</p>
 
-      <label className="block text-xs font-medium text-gray-600 mb-1">Nouvelle clé API</label>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{t("configuration.apiKeyLabel")}</label>
       <div className="flex gap-2">
         <input
           type="password"
           value={apiKey}
           onChange={(e) => { setApiKey(e.target.value); setSaved(false); }}
-          placeholder="Laissez vide pour ne pas changer"
+          placeholder={t("configuration.apiKeyPlaceholder")}
           autoComplete="off"
           className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
@@ -161,14 +158,14 @@ function ApiKeySection({ onSaved }: { onSaved: () => void }) {
           disabled={saving || !apiKey}
           className="px-4 py-2 bg-brand-600 text-white text-sm rounded disabled:opacity-50"
         >
-          {saving ? "…" : "Changer"}
+          {saving ? t("configuration.changing") : t("configuration.change")}
         </button>
       </div>
 
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       {saved && (
         <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
-          <CheckCircle size={13} /> Clé API mise à jour.
+          <CheckCircle size={13} /> {t("configuration.apiKeyUpdated")}
         </p>
       )}
     </section>
@@ -193,7 +190,7 @@ function EmailSection({ config, onSaved }: { config: ConfigResponse; onSaved: ()
       setSaved(true);
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Erreur lors de la mise à jour.");
+      setError(err instanceof ApiError ? err.detail : t("configuration.genericError"));
     } finally {
       setSaving(false);
     }
@@ -203,10 +200,10 @@ function EmailSection({ config, onSaved }: { config: ConfigResponse; onSaved: ()
     <section className="bg-white border rounded-lg p-5">
       <div className="flex items-center gap-2 mb-3">
         <Mail size={16} className="text-brand-600" />
-        <h2 className="text-sm font-semibold text-gray-700">Email de service</h2>
+        <h2 className="text-sm font-semibold text-gray-700">{t("configuration.emailTitle")}</h2>
       </div>
 
-      <label className="block text-xs font-medium text-gray-600 mb-1">Email de contact technique</label>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{t("configuration.emailLabel")}</label>
       <div className="flex gap-2">
         <input
           type="email"
@@ -219,14 +216,14 @@ function EmailSection({ config, onSaved }: { config: ConfigResponse; onSaved: ()
           disabled={saving || !changed || !email.trim()}
           className="px-4 py-2 bg-brand-600 text-white text-sm rounded disabled:opacity-50"
         >
-          {saving ? "…" : "Changer"}
+          {saving ? t("configuration.changing") : t("configuration.change")}
         </button>
       </div>
 
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       {saved && (
         <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
-          <CheckCircle size={13} /> Email mis à jour.
+          <CheckCircle size={13} /> {t("configuration.emailUpdated")}
         </p>
       )}
     </section>

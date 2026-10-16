@@ -51,6 +51,24 @@ export function useCurrentWeightProfileId(
   return usePersistedSelection("crisalid.currentWeightProfileId", defaultId, validIds);
 }
 
+export function useCurrentLeidenDomain(): [string, (field: string) => void] {
+  const [value, setValue] = useState("All sciences");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem("crisalid.currentLeidenDomain");
+    if (raw) setValue(raw);
+    setHydrated(true);
+  }, []);
+
+  function set(field: string) {
+    setValue(field);
+    window.localStorage.setItem("crisalid.currentLeidenDomain", field);
+  }
+
+  return [hydrated ? value : "All sciences", set];
+}
+
 export function useCoreOnly(): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState(true);
   const [hydrated, setHydrated] = useState(false);

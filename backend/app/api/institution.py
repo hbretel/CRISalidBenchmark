@@ -1,10 +1,11 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_config
+from app.api.indicators import LEIDEN_FIELDS
 from app.database import get_db
 from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
@@ -130,4 +131,68 @@ async def get_summary(
         leiden_snapshot_year=snapshot_year,
         leiden_decile=leiden_decile,
         leiden_decile_label=leiden_decile_label,
+    )
+
+
+
+class SynthesisCounts(BaseModel):
+    field: str
+    core_only: bool
+    # "openalex" on the whole-institution scope; "leiden" when a Leiden macro-
+    # domain is selected (OpenAlex works carry no Leiden domain).
+    source: str
+    publications: float | None
+    citations: float | None
+
+
+@router.get("/synthesis", response_model=SynthesisCounts)
+async def get_synthesis(
+    field: str = Query(default="All sciences"),
+    core_only: bool = Query(default=True),
+    config: InstanceConfig = Depends(get_config),
+    session: AsyncSession = Depends(get_db),
+) -> SynthesisCounts:
+    """Publication and citation totals for the dashboard's Synthèse section,
+    following its active filters (core/non-core toggle + Leiden macro-domain).
+
+    Whole-institution scope ("All sciences") is counted on the synced OpenAlex
+    works, as in /summary. A Leiden macro-domain has no counterpart on OpenAlex
+    works, so the reference institution's own Leiden row for that domain is
+    used instead: P (publication count — fractional, interdisciplinary
+    publications being split across domains) and TCS (total citations). Both
+    are None when the institution is not ranked by Leiden.
+    """
+    if field not in LEIDEN_FIELDS:
+        raise HTTPException(status_code=400, detail=f"field must be one of {LEIDEN_FIELDS}")
+
+    if field == "All sciences":
+        filters = [Work.is_core_publication.is_(True)] if core_only else []
+        result = await session.execute(
+            select(func.count(), func.coalesce(func.sum(Work.cited_by_count), 0)).where(*filters)
+        )
+        publications, citations = result.one()
+        return SynthesisCounts(
+            field=field, core_only=core_only, source="openalex",
+            publications=publications, citations=citations,
+        )
+
+    publications = citations = None
+    own_ror = normalize_ror(config.ror_id)
+    if own_ror:
+        result = await session.execute(
+            select(LeidenSnapshot.p, LeidenSnapshot.tcs).where(
+                LeidenSnapshot.ror_id == own_ror,
+                LeidenSnapshot.snapshot_year == select(func.max(LeidenSnapshot.snapshot_year)).scalar_subquery(),
+                LeidenSnapshot.field == field,
+                LeidenSnapshot.core_pubs_only.is_(core_only),
+                LeidenSnapshot.frac_counting.is_(False),
+            )
+        )
+        row = result.one_or_none()
+        if row:
+            publications = float(row.p) if row.p is not None else None
+            citations = row.tcs
+    return SynthesisCounts(
+        field=field, core_only=core_only, source="leiden",
+        publications=publications, citations=citations,
     )

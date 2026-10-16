@@ -14,7 +14,11 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.instance_config import InstanceConfig
+from app.models.peers import PeerGroupMember
 from app.models.profiles import WeightProfile
+from app.services.quality.comparable import quality_axis
+from app.services.ror import normalize_ror
 from app.services.indicators_impact import get_impact_indicators
 from app.services.indicators_specificity import get_specificity_indicators
 
@@ -63,10 +67,22 @@ async def calculate_composite(
         "specificite_disciplinaire": specificity_score,
     }
 
-    composite = sum(
-        axis_scores.get(axis, 0.0) * weight
-        for axis, weight in axis_weights.items()
-    )
+    # ── Qualité (evaluation grid, peer-comparable criteria) ───────────────
+    # Percentiles of the estimated quality coefficients within the peer group
+    # (services/quality/comparable.py). Unavailable until the peer cache has
+    # been filled — the axis is then left out and the others renormalized,
+    # rather than counted as 0.
+    config = (await session.execute(select(InstanceConfig).where(InstanceConfig.id == 1))).scalar_one()
+    own_ror = normalize_ror(config.ror_id)
+    member_rors = (await session.execute(
+        select(PeerGroupMember.ror_id).where(PeerGroupMember.peer_group_id == peer_group_id)
+    )).scalars().all()
+    quality = await quality_axis(session, [*member_rors, own_ror] if own_ror else list(member_rors))
+    own_quality = quality.get(own_ror) if own_ror else None
+    if own_quality:
+        axis_scores["qualite"] = _weighted_average(own_quality["percentiles"], sub_weights.get("qualite", {}))
+
+    composite = combine_axes(axis_scores, axis_weights)
 
     return {
         "weight_profile_id": weight_profile_id,
@@ -74,8 +90,19 @@ async def calculate_composite(
         "composite_score": round(composite, 1),
         "axis_scores": {k: round(v, 1) for k, v in axis_scores.items()},
         "axis_weights": axis_weights,
+        "quality_available": own_quality is not None,
         "sub_weights": sub_weights,
     }
+
+
+def combine_axes(axis_scores: dict[str, float], axis_weights: dict[str, float]) -> float:
+    """Weighted sum of the axis scores, renormalized over the axes that have a
+    score (an axis without data is excluded, not counted as 0)."""
+    present = {axis: w for axis, w in axis_weights.items() if axis in axis_scores}
+    total = sum(present.values())
+    if total <= 0:
+        return 0.0
+    return sum(axis_scores[axis] * w for axis, w in present.items()) / total
 
 
 def _weighted_average(values: dict[str, float], weights: dict[str, float]) -> float:

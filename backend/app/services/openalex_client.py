@@ -2,10 +2,10 @@
 
 Authentication note (verify at dev time):
   OpenAlex introduced mandatory API key authentication in early 2026.
-  This client passes the key as a query parameter (?api_key=...) based on
-  the current specification, but the exact format (query param vs. header)
-  should be verified against the live OpenAlex documentation before first use
-  as this mechanism was recently introduced and may still be evolving.
+  The key is sent as an "Authorization: Bearer <key>" header (verified
+  2026-10-16: honoured, an invalid key gets a 401), NOT as the ?api_key= query
+  parameter — a query parameter ends up in every logged URL and in the
+  HTTPStatusError messages stored in sync_log.error_message.
 
 Rate limits (verify at dev time):
   The spec cites ~10 req/s as an estimate; verify the actual limit and whether
@@ -34,6 +34,12 @@ OPENALEX_BASE = "https://api.openalex.org"
 
 # OpenAlex practical limit on OR-separated values within a single filter.
 OR_FILTER_CHUNK_SIZE = 50
+
+# A top-level key that only works ingested with the current paginate_works
+# `select` list carry in works.raw_json. openalex_sync forces a full (non-
+# incremental) re-sync while any stored work lacks it, so extending the select
+# list reaches works the sync filter would otherwise never re-fetch.
+WORKS_SELECT_MARKER = "best_oa_location"
 
 
 def _chunk_ids(ids: list[str], size: int) -> list[list[str]]:
@@ -66,13 +72,15 @@ class OpenAlexClient:
         self._client = httpx.AsyncClient(
             base_url=OPENALEX_BASE,
             timeout=httpx.Timeout(30.0, connect=10.0),
-            headers={"User-Agent": f"CRISalidBenchmark/1.0 (mailto:{contact_email})"},
+            headers={
+                "User-Agent": f"CRISalidBenchmark/1.0 (mailto:{contact_email})",
+                **({"Authorization": f"Bearer {api_key}"} if api_key else {}),
+            },
         )
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> dict:
         """Single GET call with auth params injected. Raises on non-2xx."""
         full_params = {
-            "api_key": self._api_key,
             "mailto": self._contact_email,
             **(params or {}),
         }
@@ -190,7 +198,14 @@ class OpenAlexClient:
                         # top-level "is_oa" here 400s every single request.
                         "id,title,publication_year,type,cited_by_count,"
                         "open_access,authorships,primary_topic,topics,"
-                        "primary_location,language,is_retracted"
+                        "primary_location,language,is_retracted,"
+                        # Read by the evaluation-grid checkers (qualitative
+                        # indicators, app/services/quality/). Verified valid
+                        # select fields on 2026-10-16. Changing this list must
+                        # come with a bump of WORKS_SELECT_MARKER below.
+                        "doi,ids,publication_date,locations,best_oa_location,"
+                        "abstract_inverted_index,fwci,citation_normalized_percentile,"
+                        "sustainable_development_goals,funders,awards,referenced_works_count"
                     ),
                 },
             )

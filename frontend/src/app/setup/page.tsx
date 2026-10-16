@@ -8,6 +8,7 @@ import { LineageConfirm } from "@/components/setup/LineageConfirm";
 import { useConfig } from "@/hooks/useConfig";
 import { api, ApiError } from "@/lib/api";
 import { CheckCircle, Loader2 } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 type Step = "validate" | "confirm" | "saving" | "done";
 
@@ -51,13 +52,13 @@ export default function SetupPage() {
       setTimeout(() => router.push("/"), 2000);
     } catch (err) {
       setSaveError(
-        err instanceof ApiError ? err.detail : "Erreur lors de l'enregistrement.",
+        err instanceof ApiError ? err.detail : t("setup.saveError"),
       );
       setStep("confirm");
     }
   }
 
-  const stepLabels = ["Saisie", "Périmètre", "Enregistrement"];
+  const stepLabels = [t("setup.stepValidate"), t("setup.stepConfirm"), t("setup.stepSave")];
   const stepIndex = step === "validate" ? 0 : step === "confirm" ? 1 : 2;
 
   return (
@@ -65,10 +66,8 @@ export default function SetupPage() {
       <div className="w-full max-w-xl bg-white rounded-xl shadow-sm border p-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">Configuration initiale</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Configurez l'établissement à analyser. Cette étape est requise une seule fois.
-          </p>
+          <h1 className="text-xl font-bold text-gray-900">{t("setup.title")}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t("setup.subtitle")}</p>
         </div>
 
         {/* Stepper */}
@@ -123,15 +122,15 @@ export default function SetupPage() {
         {step === "saving" && (
           <div className="flex flex-col items-center py-10 gap-3 text-gray-600">
             <Loader2 size={32} className="animate-spin text-brand-600" />
-            <span className="text-sm">Enregistrement en cours…</span>
+            <span className="text-sm">{t("setup.saving")}</span>
           </div>
         )}
 
         {step === "done" && (
           <div className="flex flex-col items-center py-10 gap-3 text-green-600">
             <CheckCircle size={40} />
-            <span className="text-sm font-medium">Configuration enregistrée.</span>
-            <span className="text-xs text-gray-500">Redirection vers le tableau de bord…</span>
+            <span className="text-sm font-medium">{t("setup.done")}</span>
+            <span className="text-xs text-gray-500">{t("setup.doneRedirect")}</span>
           </div>
         )}
       </div>

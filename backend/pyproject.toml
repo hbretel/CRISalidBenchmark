@@ -21,6 +21,9 @@ dependencies = [
     "python-multipart>=0.0.9",
     "openpyxl>=3.1",
     "pycountry>=24.6",
+    # Imported by the vendored evaluation-grid checkers (vendor/evaluation_grid/
+    # auto_checkers/sources.py); the backend's own HTTP calls use httpx.
+    "requests>=2.31",
 ]
 
 [project.optional-dependencies]

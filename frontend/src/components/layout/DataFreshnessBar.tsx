@@ -2,9 +2,10 @@
 
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { t } from "@/lib/i18n";
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "jamais";
+  if (!iso) return t("freshnessBar.leidenNever");
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "short",
     timeStyle: "short",
@@ -42,36 +43,38 @@ export function DataFreshnessBar() {
     <div className={`border-b px-4 py-1.5 text-xs flex items-center gap-4 ${bgColor}`}>
       <Icon size={13} className={iconColor} />
       <span className="text-gray-600">
-        <strong>OpenAlex :</strong>{" "}
+        <strong>{t("freshnessBar.openalexLabel")}</strong>{" "}
         {neverSynced ? (
-          <span className="text-red-600 font-medium">Synchronisation non encore effectuée</span>
+          <span className="text-red-600 font-medium">{t("freshnessBar.neverSynced")}</span>
         ) : (
           <>
-            synchronisé le{" "}
+            {t("freshnessBar.syncedOnPrefix")}{" "}
             <span className={openAlexStale ? "text-amber-700 font-medium" : "text-gray-700"}>
               {formatDate(lastOpenAlexSync)}
             </span>
-            {openAlexStale && " (> 48 h)"}
+            {openAlexStale && t("freshnessBar.staleFlag")}
           </>
         )}
       </span>
       <span className="text-gray-400">|</span>
       <span className="text-gray-600">
-        <strong>Leiden :</strong>{" "}
+        <strong>{t("freshnessBar.leidenLabel")}</strong>{" "}
         {lastLeidenSync && leidenSummary ? (
           <span className="text-gray-700">
-            importé le {formatDate(lastLeidenSync)}
-            {leidenSummary.period && <> · période {leidenSummary.period}</>} ·{" "}
-            {leidenSummary.row_count.toLocaleString("fr-FR")} lignes ·{" "}
-            {leidenSummary.institution_count.toLocaleString("fr-FR")} établissements
+            {t("freshnessBar.leidenImported", { date: formatDate(lastLeidenSync) })}
+            {leidenSummary.period && t("freshnessBar.leidenPeriod", { period: leidenSummary.period })} ·{" "}
+            {t("freshnessBar.leidenCounts", {
+              rows: leidenSummary.row_count.toLocaleString("fr-FR"),
+              institutions: leidenSummary.institution_count.toLocaleString("fr-FR"),
+            })}
           </span>
         ) : (
-          <span className="text-gray-500">aucun import</span>
+          <span className="text-gray-500">{t("freshnessBar.leidenNever")}</span>
         )}
       </span>
       <span className="ml-auto flex items-center gap-1 text-gray-400">
         <Clock size={11} />
-        Données actualisées nuitamment (OpenAlex) et annuellement (Leiden)
+        {t("freshnessBar.refreshNote")}
       </span>
     </div>
   );

@@ -45,7 +45,7 @@ from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
 from app.models.sync_log import SyncLog
 from app.models.works import Work, WorkTopic, Topic
-from app.services.openalex_client import OpenAlexClient
+from app.services.openalex_client import OpenAlexClient, WORKS_SELECT_MARKER
 from app.services.institution_resolver import compute_effective_lineage
 from app.services.leiden_period import parse_period_years
 
@@ -292,6 +292,20 @@ async def run_openalex_sync() -> None:
                 )
                 from_updated_date = None
 
+            # Works ingested before the `select` list was last extended lack
+            # fields the qualitative indicators need; an incremental sync
+            # would only refresh those modified in OpenAlex since.
+            if from_updated_date:
+                outdated_result = await session.execute(
+                    select(Work.id).where(~Work.raw_json.has_key(WORKS_SELECT_MARKER)).limit(1)
+                )
+                if outdated_result.first():
+                    logger.info(
+                        "Some works were ingested with an older field selection — forcing a "
+                        "full re-sync of the window instead of an incremental one."
+                    )
+                    from_updated_date = None
+
         # Create sync log entry
         log = SyncLog(job_name="openalex_nightly", status="running")
         session.add(log)
@@ -358,8 +372,14 @@ async def run_openalex_sync() -> None:
                 from_updated_date or "none (full sync)",
             )
 
+            # Set when a full (non-incremental) pass completes: only then do we
+            # know the complete set of works OpenAlex currently attributes to
+            # the institution, and can drop the ones it no longer returns.
+            full_sync_started_at: datetime | None = None
+
             async def _ingest(from_date: str | None) -> None:
-                nonlocal total_processed
+                nonlocal total_processed, full_sync_started_at
+                started_at = datetime.now(timezone.utc)
                 async for page in client.paginate_works(
                     config.openalex_institution_id,
                     from_updated_date=from_date,
@@ -371,6 +391,8 @@ async def run_openalex_sync() -> None:
                         await session.commit()
                     total_processed += count
                     logger.info("Ingested %d works (total so far: %d)", count, total_processed)
+                if from_date is None:
+                    full_sync_started_at = started_at
 
             try:
                 await _ingest(from_updated_date)
@@ -404,6 +426,35 @@ async def run_openalex_sync() -> None:
                 await session.commit()
             if pruned:
                 logger.info("Pruned %d works outside the current Leiden window", pruned)
+
+            # Prune works a full pass did not return: deleted/merged in OpenAlex
+            # (404 on their id) or no longer affiliated with the institution.
+            # Without this they inflate every count and, lacking the fields of
+            # the current `select` list, would force a full re-sync every night.
+            # Guard: skip if the pass returned under half of the stored works —
+            # more likely an API incident than a real change in the corpus.
+            if full_sync_started_at is not None:
+                async with AsyncSessionLocal() as session:
+                    stale_count = (await session.execute(
+                        select(func.count()).select_from(Work).where(Work.last_synced_at < full_sync_started_at)
+                    )).scalar_one()
+                    kept_count = (await session.execute(
+                        select(func.count()).select_from(Work).where(Work.last_synced_at >= full_sync_started_at)
+                    )).scalar_one()
+                    if stale_count and kept_count >= stale_count:
+                        await session.execute(
+                            text("DELETE FROM works WHERE last_synced_at < :cutoff"),
+                            {"cutoff": full_sync_started_at},
+                        )
+                        await session.commit()
+                        logger.info("Pruned %d works no longer returned by OpenAlex", stale_count)
+                    elif stale_count:
+                        logger.warning(
+                            "Full sync returned %d works but %d stored works were not seen — "
+                            "pruning skipped (likely an incomplete sync).",
+                            kept_count,
+                            stale_count,
+                        )
 
             # Mark success
             async with AsyncSessionLocal() as session:

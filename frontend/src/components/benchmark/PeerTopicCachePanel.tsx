@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { t } from "@/lib/i18n";
 
 interface TopicDistributionStatus {
   status: "complete" | "in_progress";
@@ -49,7 +50,7 @@ export function PeerTopicCachePanel({ groupId }: { groupId: number }) {
       }
       return res;
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Erreur lors du calcul.");
+      setError(err instanceof ApiError ? err.detail : t("peerTopicCache.error"));
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -78,14 +79,14 @@ export function PeerTopicCachePanel({ groupId }: { groupId: number }) {
         className="flex items-center gap-1.5 px-2.5 py-1.5 border rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
       >
         <RefreshCw size={13} className={running ? "animate-spin" : ""} />
-        {running ? "Calcul en cours…" : "Calculer la distribution par topics des pairs"}
+        {running ? t("peerTopicCache.computing") : t("peerTopicCache.trigger")}
       </button>
-      <InfoTooltip text="Peuple le cache de distribution par topic OpenAlex pour les membres de ce groupe de pairs, nécessaire à la section « Topics signature » du tableau de bord. Peut prendre plusieurs minutes pour un grand groupe — les données restent en cache jusqu'au prochain import Leiden." />
+      <InfoTooltip text={t("peerTopicCache.tooltip")} />
       {state && (
         <span className="text-gray-400">
           {state.status === "complete"
-            ? `Terminé (${state.progress.done}/${state.progress.total})`
-            : `${state.progress.done}/${state.progress.total}`}
+            ? t("peerTopicCache.complete", { done: state.progress.done, total: state.progress.total })
+            : t("peerTopicCache.inProgress", { done: state.progress.done, total: state.progress.total })}
         </span>
       )}
       {error && <span className="text-red-600">{error}</span>}

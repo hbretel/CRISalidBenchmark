@@ -3,13 +3,19 @@
 import useSWR from "swr";
 import { FileText, TrendingUp, Award } from "lucide-react";
 import { api } from "@/lib/api";
-import type { ImpactIndicators, InstitutionSummary } from "@/types/api";
+import type { ImpactIndicators, InstitutionSummary, SynthesisCounts } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { FilterChip } from "@/components/ui/FilterChip";
+import { ComparisonInstitutionsTable } from "@/components/benchmark/ComparisonInstitutionsTable";
+import { LEIDEN_DOMAINS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
 
 interface Props {
   summary: InstitutionSummary;
   coreOnly: boolean;
   peerGroupId: number | null;
+  weightProfileId: number | null;
+  field: string;
 }
 
 function StatCard({
@@ -37,49 +43,71 @@ function StatCard({
   );
 }
 
-export function SynthesisSection({ summary, coreOnly, peerGroupId }: Props) {
+function formatCount(v: number | null | undefined): string {
+  return v != null ? Math.round(v).toLocaleString("fr-FR") : t("common.dash");
+}
+
+export function SynthesisSection({ summary, coreOnly, peerGroupId, weightProfileId, field }: Props) {
+  const { data: counts } = useSWR<SynthesisCounts>(
+    `/institution/synthesis?field=${encodeURIComponent(field)}&core_only=${coreOnly}`,
+    (url: string) => api.get<SynthesisCounts>(url),
+  );
   const { data: impact } = useSWR<ImpactIndicators>(
     peerGroupId
-      ? `/indicators/impact-scientifique?peer_group_id=${peerGroupId}&field=${encodeURIComponent("All sciences")}&core_only=${coreOnly}`
+      ? `/indicators/impact-scientifique?peer_group_id=${peerGroupId}&field=${encodeURIComponent(field)}&core_only=${coreOnly}`
       : null,
     (url: string) => api.get<ImpactIndicators>(url),
   );
 
-  const publications = coreOnly ? summary.core_works : summary.total_works;
-  const citations = coreOnly ? summary.core_citations : summary.total_citations;
+  const fromLeiden = counts?.source === "leiden";
+  const sourceNote = fromLeiden ? " " + t("synthesis.leidenDomainSourceNote") : "";
   const headline = impact?.indicators.impact_normalise_leiden;
   const headlineLabel =
-    headline?.leiden_column === "pp_10_cits"
-      ? "% avec au moins 10 citations"
-      : "% dans le top 10% le plus cité";
+    headline?.leiden_column === "pp_10_cits" ? t("synthesis.headlinePp10Cits") : t("synthesis.headlinePpTop10");
 
   return (
     <section className="mb-10">
-      <h2 className="text-base font-semibold text-gray-800 mb-4">Synthèse</h2>
+      <h2 className="text-base font-semibold text-gray-800 mb-2">{t("synthesis.title")}</h2>
+      <div className="flex flex-wrap items-center gap-1.5 mb-4">
+        <FilterChip label={coreOnly ? t("filters.core") : t("filters.allPublications")} variant="active" />
+        {summary.period_start && summary.period_end && (
+          <FilterChip label={`${summary.period_start}–${summary.period_end}`} />
+        )}
+        <FilterChip
+          label={t(`leidenDomain.${LEIDEN_DOMAINS.find((d) => d.value === field)?.value ?? field}`)}
+          variant={field !== "All sciences" ? "active" : "neutral"}
+        />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
-          label="Nombre de publications"
-          value={publications.toLocaleString("fr-FR")}
+          label={t("synthesis.publications")}
+          value={formatCount(counts?.publications)}
           icon={FileText}
           tooltip={
-            coreOnly
-              ? "Publications « core » : approximation de la définition Leiden (source CWTS Core, type article/revue/chapitre, anglais, non rétracté)."
-              : "Ensemble des publications synchronisées depuis OpenAlex, sans filtre core."
+            (coreOnly
+              ? t(fromLeiden ? "synthesis.publicationsTooltipCoreLeiden" : "synthesis.publicationsTooltipCore")
+              : t(fromLeiden ? "synthesis.publicationsTooltipAllLeiden" : "synthesis.publicationsTooltipAll")) + sourceNote
           }
         />
         <StatCard
-          label="Somme des citations"
-          value={citations.toLocaleString("fr-FR")}
+          label={t("synthesis.citations")}
+          value={formatCount(counts?.citations)}
           icon={TrendingUp}
-          tooltip={coreOnly ? "Somme des citations reçues par les publications core." : "Somme des citations reçues par l'ensemble des publications."}
+          tooltip={(coreOnly ? t("synthesis.citationsTooltipCore") : t("synthesis.citationsTooltipAll")) + sourceNote}
         />
         <StatCard
           label={headlineLabel}
-          value={headline?.value != null ? `${headline.value}%` : "—"}
+          value={headline?.value != null ? `${headline.value}%` : t("common.dash")}
           icon={Award}
-          tooltip="Indicateur d'impact par défaut du Leiden Ranking : en mode publications core, la part de publications dans le top 10% le plus cité (normalisée par domaine) ; en mode toutes les publications, la part de publications ayant reçu au moins 10 citations (seuil absolu, non normalisé — ce n'est pas le même indicateur)."
+          tooltip={t("synthesis.headlineTooltip")}
         />
       </div>
+      <ComparisonInstitutionsTable
+        groupId={peerGroupId}
+        weightProfileId={weightProfileId}
+        coreOnly={coreOnly}
+        field={field}
+      />
     </section>
   );
 }

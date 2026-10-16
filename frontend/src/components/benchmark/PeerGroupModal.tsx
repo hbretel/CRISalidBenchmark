@@ -5,6 +5,7 @@ import { api, ApiError } from "@/lib/api";
 import { usePeerGroupMembers } from "@/hooks/usePeerGroups";
 import type { PeerGroupSummary } from "@/types/api";
 import { Modal } from "@/components/ui/Modal";
+import { t } from "@/lib/i18n";
 
 interface SearchResult {
   ror_id: string;
@@ -68,7 +69,7 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
       setSearchResults(res);
       setHasSearched(true);
     } catch (err) {
-      setSearchError(err instanceof ApiError ? err.detail : "Erreur lors de la recherche.");
+      setSearchError(err instanceof ApiError ? err.detail : t("peerGroupModal.searchError"));
     } finally {
       setSearching(false);
     }
@@ -93,7 +94,7 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
       onSaved(group);
       onClose();
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.detail : "Erreur lors de l'enregistrement.");
+      setSaveError(err instanceof ApiError ? err.detail : t("peerGroupModal.saveError"));
     } finally {
       setSaving(false);
     }
@@ -105,17 +106,17 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
     <Modal
       open={open}
       onClose={onClose}
-      title={editingGroup ? "Modifier le groupe de comparaison" : "Nouveau groupe de comparaison"}
+      title={editingGroup ? t("peerGroupModal.editTitle") : t("peerGroupModal.newTitle")}
       maxWidth="max-w-xl"
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Nom du groupe</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{t("peerGroupModal.nameLabel")}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Nom du groupe de comparaison"
+            placeholder={t("peerGroupModal.namePlaceholder")}
             className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
@@ -123,7 +124,7 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
         {selectedList.length > 0 && (
           <div>
             <p className="text-xs font-medium text-gray-600 mb-1">
-              {selectedList.length} établissement(s) sélectionné(s)
+              {t("peerGroupModal.selectedCount", { count: selectedList.length })}
             </p>
             <div className="border rounded divide-y max-h-32 overflow-y-auto text-sm">
               {selectedList.map((r) => (
@@ -134,7 +135,7 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
                     onClick={() => toggle(r)}
                     className="text-xs text-gray-400 hover:text-red-600"
                   >
-                    Retirer
+                    {t("common.remove")}
                   </button>
                 </div>
               ))}
@@ -143,11 +144,11 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
         )}
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Ajouter des établissements</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">{t("peerGroupModal.addLabel")}</label>
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder="Ex. Sorbonne, MIT, Oxford… (min. 2 caractères)"
+              placeholder={t("peerGroupModal.searchPlaceholder")}
               value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -159,14 +160,13 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
               disabled={searching || searchQ.trim().length < 2}
               className="px-3 py-2 bg-gray-100 rounded text-sm border hover:bg-gray-200 disabled:opacity-50"
             >
-              {searching ? "…" : "Rechercher"}
+              {searching ? t("peerGroupModal.searching") : t("peerGroupModal.search")}
             </button>
           </div>
           {searchError && <p className="text-xs text-red-600 mt-2">{searchError}</p>}
           {hasSearched && !searching && searchResults.length === 0 && !searchError && (
             <p className="text-xs text-gray-500 mt-2">
-              Aucun établissement trouvé pour « {searchQ} ». La recherche ne porte que sur les
-              établissements présents dans le référentiel Leiden Ranking.
+              {t("peerGroupModal.noResults", { query: searchQ })}
             </p>
           )}
           {searchResults.length > 0 && (
@@ -195,7 +195,7 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
             onClick={onClose}
             className="px-4 py-2 text-sm border rounded text-gray-600 hover:bg-gray-50"
           >
-            Annuler
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -203,7 +203,7 @@ export function PeerGroupModal({ open, onClose, editingGroup, onSaved }: Props) 
             disabled={saving || !name.trim() || selected.size === 0}
             className="flex-1 py-2 px-4 bg-brand-600 text-white rounded text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
           >
-            {saving ? "Enregistrement…" : "Sauvegarder le groupe"}
+            {saving ? t("common.saving") : t("peerGroupModal.saveButton")}
           </button>
         </div>
       </div>

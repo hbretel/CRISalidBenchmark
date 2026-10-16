@@ -1,0 +1,84 @@
+{
+  "_note": "Listes d'appartenance à des structures fédératives d'éditeurs académiques (critère 12 et sous-critères 12.1-12.5). Contrairement aux API bibliométriques (sources.py), ces structures n'exposent pas d'API publique : chaque liste ci-dessous a été relevée manuellement (ou via WebFetch) à la date `verified_on`, et n'est donc PAS mise à jour automatiquement -- à revérifier périodiquement (une fois par an semble raisonnable) en rouvrant `source_url`. Le principe reste le même que pour les API : une fois la liste à jour obtenue, le rapprochement nom d'éditeur -> décision Oui/Non redevient un travail mécanique (comparaison de chaînes), pas un raisonnement, via check_publisher_membership() dans checkers.py.",
+
+  "aeup": {
+    "criterion": "12.3",
+    "full_name": "Association of European University Presses",
+    "source_url": "https://www.aeup.eu/membership/list-of-members/",
+    "verified_on": "2026-09-15",
+    "members": [
+      "Amsterdam University Press",
+      "Athabasca University Press",
+      "Central European University Press",
+      "Éditions de l'École des Hautes Études en Sciences Sociales",
+      "Éditions de l'École Normale Supérieure de Lyon",
+      "ENS Éditions",
+      "Éditions de la Maison des sciences de l'homme",
+      "Éditions Quae",
+      "Firenze University Press",
+      "Leuven University Press",
+      "Manchester University Press",
+      "Presses universitaires de Franche-Comté",
+      "Presses Universitaires de Louvain",
+      "Université Grenoble Alpes Éditions",
+      "UCL Press",
+      "Vandenhoeck & Ruprecht"
+    ],
+    "coverage_caveat": "Liste incomplète : seuls les membres relevés lors de la vérification du 15/09/2026 (dont tous les membres français identifiés) sont listés ici. L'AEUP compte plusieurs dizaines de membres à travers l'Europe -- rouvrir source_url pour la liste complète avant de conclure « Non » avec certitude sur un éditeur non listé ici."
+  },
+
+  "aupresses": {
+    "criterion": "12.4",
+    "full_name": "Association of University Presses (ex-AAUP)",
+    "source_url": "https://aupresses.org/about-aup/member-presses/",
+    "verified_on": null,
+    "members": [
+      "The MIT Press"
+    ],
+    "coverage_caveat": "Non revérifiée à ce jour dans ce projet (page de la liste des membres non accessible lors de la dernière tentative -- 404). Seule l'appartenance de MIT Press, déjà confirmée manuellement lors du test Chaignon (2025) via la page des membres consultée à l'époque, est incluse ici. Liste très incomplète (l'AUPresses compte plus de 150 membres, majoritairement nord-américains) -- à compléter avant tout usage à grande échelle."
+  },
+
+  "une": {
+    "criterion": "12.1",
+    "full_name": "Unión de Editoriales Universitarias Españolas",
+    "source_url": "https://www.une.es/",
+    "verified_on": null,
+    "members": [],
+    "coverage_caveat": "Non relevée dans ce projet -- liste vide par défaut (aucun faux « Non » n'est mieux qu'un faux « Oui », mais toute réponse issue de cette liste doit être traitée comme non fiable tant qu'elle n'a pas été remplie)."
+  },
+
+  "eulac": {
+    "criterion": "12.2",
+    "full_name": "Asociación de Editoriales Universitarias de América Latina y el Caribe",
+    "source_url": null,
+    "verified_on": null,
+    "members": [],
+    "coverage_caveat": "Non relevée dans ce projet."
+  },
+
+  "library_publishing_coalition": {
+    "criterion": "12.5",
+    "full_name": "Library Publishing Coalition",
+    "source_url": "https://librarypublishing.org/members/",
+    "verified_on": null,
+    "members": [],
+    "coverage_caveat": "Non relevée dans ce projet."
+  },
+
+  "scholarled": {
+    "criterion": "26.5",
+    "full_name": "ScholarLed",
+    "source_url": "https://scholarled.org/",
+    "verified_on": "2026-09-15",
+    "members": [
+      "Open Book Publishers",
+      "punctum books",
+      "meson press",
+      "Mattering Press",
+      "ANU Press",
+      "Open Humanities Press",
+      "Language Science Press"
+    ],
+    "coverage_caveat": "ScholarLed est un petit collectif de 7 éditeurs en accès ouvert -- liste a priori exhaustive et stable, mais à revérifier sur source_url en cas de doute."
+  }
+}
