@@ -55,16 +55,22 @@ class PeerGroupMember(Base):
 
 
 class PeerTopicCount(Base):
-    """Cached per-topic publication counts for peer institutions.
+    """Cached per-topic publication statistics, for every institution of the
+    peer groups and for the reference institution itself.
 
-    Populated on-demand when a peer group is first viewed, via the OpenAlex
-    group_by API (GET /works?filter=institutions.lineage:{id}&group_by=primary_topic.id).
-    This is intentionally volume-only (no citation data) — obtaining citation-
-    weighted impact at the fine topic level for peers would require ingesting
-    all their publications, which is out of scope for the MVP (see §4.5, option b).
+    Populated by the peer-cache fill via the OpenAlex group_by API
+    (GET /works?filter=authorships.institutions.lineage:{id},publication_year:
+    {window}[,extra]&group_by=primary_topic.id), one paginated call per
+    statistic: all works, top 10 % cited (citation_normalized_percentile),
+    open access, international collaboration (countries_distinct_count > 1).
+    These are the topic-level counterparts of the Leiden indicators of the
+    impact axis, used by the topics signature (services/topics_signature.py).
+    Full publication ingestion for peers stays out of scope (§4.5, option b).
 
-    The lineage filter is used for peers too (same as for the configured institution)
-    so that federated peer institutions are not artificially under-counted.
+    period_start / period_end: Leiden window the counts cover — rows for
+    another window are refetched. The lineage filter is used for peers too
+    (same as for the configured institution) so that federated peer
+    institutions are not artificially under-counted.
     """
 
     __tablename__ = "peer_topic_counts"
@@ -77,9 +83,14 @@ class PeerTopicCount(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     openalex_institution_id: Mapped[str] = mapped_column(Text, nullable=False)
-    ror_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ror_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
     topic_id: Mapped[str] = mapped_column(Text, ForeignKey("topics.id"), nullable=False)
     works_count: Mapped[int] = mapped_column(Integer, default=0)
+    top10_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    oa_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intl_collab_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=datetime.utcnow
     )

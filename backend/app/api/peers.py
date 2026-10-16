@@ -9,9 +9,9 @@ from app.database import get_db
 from app.models.instance_config import InstanceConfig
 from app.models.leiden import LeidenSnapshot
 from app.models.peers import PeerGroup, PeerGroupMember
-from app.api.indicators import LEIDEN_FIELDS
-from app.services.peer_comparison import get_peer_comparison_table
+from app.services.group_benchmark import get_group_benchmark
 from app.services.peer_topic_cache import fill_cache_for_group, get_fill_progress
+from app.services.ror import normalize_ror
 
 router = APIRouter(prefix="/peer-groups", tags=["peer-groups"])
 
@@ -241,16 +241,31 @@ async def list_members(
 _quality_refilled: set[int] = set()
 
 
-async def _missing_quality_counts(session: AsyncSession, group_id: int) -> bool:
+async def _missing_cached_data(session: AsyncSession, group_id: int, own_ror: str | None) -> bool:
+    """True if a member (or the reference institution) lacks quality counts or
+    per-topic statistics for the current Leiden window."""
+    from app.models.peers import PeerTopicCount
     from app.services.quality.comparable import cached_counts_by_ror, current_window
 
-    rors = (await session.execute(
+    rors = set((await session.execute(
         select(PeerGroupMember.ror_id).where(PeerGroupMember.peer_group_id == group_id)
-    )).scalars().all()
+    )).scalars().all())
+    if own_ror:
+        rors.add(own_ror)
     years = await current_window(session)
     if not years or not rors:
         return False
-    return len(await cached_counts_by_ror(session, list(rors), years)) < len(set(rors))
+    if len(await cached_counts_by_ror(session, list(rors), years)) < len(rors):
+        return True
+    with_topics = (await session.execute(
+        select(func.count(func.distinct(PeerTopicCount.ror_id))).where(
+            PeerTopicCount.ror_id.in_(list(rors)),
+            PeerTopicCount.period_start == years[0],
+            PeerTopicCount.period_end == years[1],
+            PeerTopicCount.top10_count.is_not(None),
+        )
+    )).scalar_one()
+    return with_topics < len(rors)
 
 
 @router.get("/{group_id}/topic-distribution")
@@ -268,10 +283,12 @@ async def topic_distribution(
     """
     progress = get_fill_progress(group_id)
     if progress and not progress.running:
-        # A fill completed before the quality-axis counts existed (or for an
-        # older Leiden window) is re-run once per process; members OpenAlex
-        # cannot resolve would otherwise re-trigger it on every poll.
-        if group_id in _quality_refilled or not await _missing_quality_counts(session, group_id):
+        # A fill completed before the quality-axis counts / per-topic
+        # statistics existed (or for an older Leiden window) is re-run once
+        # per process; members OpenAlex cannot resolve would otherwise
+        # re-trigger it on every poll.
+        own_ror = normalize_ror(config.ror_id)
+        if group_id in _quality_refilled or not await _missing_cached_data(session, group_id, own_ror):
             return {"status": "complete", "progress": {"done": progress.done, "total": progress.total}}
         _quality_refilled.add(group_id)
     if progress and progress.running:
@@ -284,24 +301,21 @@ async def topic_distribution(
     return {"status": "in_progress", "progress": {"done": 0, "total": progress.total}}
 
 
-@router.get("/{group_id}/comparison-table")
-async def comparison_table(
+@router.get("/{group_id}/benchmark")
+async def group_benchmark(
     group_id: int,
     weight_profile_id: int = Query(...),
-    core_only: bool = Query(default=True),
-    field: str = Query(default="All sciences"),
+    domain: str | None = Query(default=None, description='OpenAlex domain "1".."4"; omitted = all domains'),
     config: InstanceConfig = Depends(get_config),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Every institution in the peer group + the reference institution, with a
-    Leiden-only "global score" comparable across all of them (see
-    services/peer_comparison.py for why the specificity axis is simplified)."""
-    if field not in LEIDEN_FIELDS:
-        raise HTTPException(status_code=400, detail=f"field must be one of {LEIDEN_FIELDS}")
+    """"Groupes de comparaison" tab: every institution of the group + the
+    reference institution on OpenAlex counts, with indicators, percentiles,
+    global score and its breakdown (services/group_benchmark.py)."""
     try:
-        return await get_peer_comparison_table(session, group_id, weight_profile_id, core_only, field)
+        return await get_group_benchmark(session, group_id, weight_profile_id, domain)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/leiden-institutions")

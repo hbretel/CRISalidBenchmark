@@ -18,7 +18,7 @@ from app.models.quality import (
 )
 from app.models.works import Work
 from app.services.quality import grid, llm, pipeline, sources
-from app.services.quality.comparable import COMPARABLE_FILTERS, quality_axis
+from app.services.quality.comparable import COMPARABLE_FILTERS, QUALITY_EXCLUDED, category_weights
 from grille.score_engine import classify_role
 
 router = APIRouter(prefix="/quality", tags=["quality"])
@@ -230,7 +230,10 @@ async def _grid_payload(session: AsyncSession) -> dict:
                 for name, value in default_params.items()
             ],
             "automated": cid in automated,
-            "comparable": cid in COMPARABLE_FILTERS,
+            # Counted for every institution of the comparison groups: as a
+            # quality-axis criterion, or reported as an impact indicator.
+            "comparable": cid in COMPARABLE_FILTERS and cid not in QUALITY_EXCLUDED,
+            "benchmark_impact": cid in QUALITY_EXCLUDED,
         })
     return {
         "has_overrides": grid.has_overrides(),
@@ -330,30 +333,51 @@ async def load_grid_overrides() -> None:
         logger.warning("Stored grid calibration rejected, using the default grid: %s", exc)
 
 
-# ── Benchmark quality axis (dashboard card) ──────────────────────────────────
+# ── Category weights of the quality axis ─────────────────────────────────────
 
-@router.get("/benchmark")
-async def quality_benchmark(
-    peer_group_id: int = Query(...),
+class CategoryWeights(BaseModel):
+    qualite_ex_ante: float
+    qualite_intrinseque: float
+    qualite_ex_post: float
+
+
+@router.get("/category-weights")
+async def get_category_weights(
     config: InstanceConfig = Depends(get_config),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Reference institution on the peer-comparable quality axis."""
-    from app.models.peers import PeerGroupMember
-    from app.services.ror import normalize_ror
-
-    own_ror = normalize_ror(config.ror_id)
-    members = (await session.execute(
-        select(PeerGroupMember.ror_id).where(PeerGroupMember.peer_group_id == peer_group_id)
-    )).scalars().all()
-    axis = await quality_axis(session, [*members, own_ror] if own_ror else list(members))
-    own = axis.get(own_ror) if own_ror else None
     return {
-        "available": own is not None,
-        "group_size": len(set(members)),
-        "institutions_with_data": len(axis),
-        "n_criteria": len(COMPARABLE_FILTERS),
-        "estimates": own["estimates"] if own else None,
-        "percentiles": own["percentiles"] if own else None,
-        "global_percentile": own["global_percentile"] if own else None,
+        "weights": await category_weights(session),
+        "is_default": config.quality_category_weights is None,
+        "inactive": _inactive_categories(),
     }
+
+
+@router.put("/category-weights")
+async def update_category_weights(
+    body: CategoryWeights,
+    config: InstanceConfig = Depends(get_config),
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    """Instance-wide weighting between the grid categories in the comparison-
+    group benchmark's quality axis (axis score and global coefficient — see
+    services/quality/comparable.py). Takes effect immediately: the axis is
+    computed at request time from cached counts."""
+    values = body.model_dump()
+    if any(v < 0 for v in values.values()):
+        raise HTTPException(status_code=400, detail="Poids négatif interdit.")
+    total = sum(values.values())
+    if abs(total - 1.0) > 0.001:
+        raise HTTPException(status_code=400, detail=f"Les poids doivent totaliser 100 % (actuellement {total * 100:.1f} %).")
+    db_config = (await session.execute(select(InstanceConfig).where(InstanceConfig.id == 1))).scalar_one()
+    db_config.quality_category_weights = values
+    await session.commit()
+    return {"weights": await category_weights(session), "is_default": False, "inactive": _inactive_categories()}
+
+
+def _inactive_categories() -> list[str]:
+    """Categories without any non-neutral criterion: weight forced to 0."""
+    from app.services.quality.comparable import SUB_INDICATORS, active_categories, criteria_terms
+
+    active = active_categories(criteria_terms())
+    return [k for k in SUB_INDICATORS if k not in active]

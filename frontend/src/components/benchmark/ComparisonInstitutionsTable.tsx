@@ -1,152 +1,173 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { usePeerComparisonTable } from "@/hooks/usePeerGroups";
-import type { PeerComparisonRow } from "@/types/api";
+import { useMemo, useState } from "react";
+import { Calculator } from "lucide-react";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import type { GroupBenchmark, GroupBenchmarkRow } from "@/types/api";
+import { ScoreBreakdownModal } from "./ScoreBreakdownModal";
 import { t } from "@/lib/i18n";
 
-type SortKey =
-  | "name"
-  | "p_total"
-  | "headline_value"
-  | "oa_pct"
-  | "collab_pct"
-  | "herfindahl_simplified"
-  | "quality_coefficient"
-  | "composite_score";
-
-const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: "name", label: t("comparisonTable.colInstitution") },
-  { key: "p_total", label: t("comparisonTable.colPublications"), numeric: true },
-  { key: "headline_value", label: t("comparisonTable.colHeadline"), numeric: true },
-  { key: "oa_pct", label: t("comparisonTable.colOa"), numeric: true },
-  { key: "collab_pct", label: t("comparisonTable.colCollab"), numeric: true },
-  { key: "herfindahl_simplified", label: t("comparisonTable.colSpecificity"), numeric: true },
-  { key: "quality_coefficient", label: t("comparisonTable.colQuality"), numeric: true },
-  { key: "composite_score", label: t("comparisonTable.colScore"), numeric: true },
-];
-
 interface Props {
-  groupId: number | null;
-  weightProfileId: number | null;
-  coreOnly: boolean;
-  field: string;
+  benchmark: GroupBenchmark;
+  profileName?: string;
+  domain: string;
 }
 
-export function ComparisonInstitutionsTable({ groupId, weightProfileId, coreOnly, field }: Props) {
-  const { data, isLoading, error } = usePeerComparisonTable(groupId, weightProfileId, coreOnly, field);
-  const [sortKey, setSortKey] = useState<SortKey>("composite_score");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+const dash = () => t("common.dash");
+const percent = (v: number | null | undefined) =>
+  v != null ? `${v.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : dash();
 
-  function toggleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
+// Impact columns shown in the summary table (the others are in the cards and
+// in each score breakdown — keeps the table within the page width).
+const TABLE_IMPACT = ["pp_top_10", "pp_top_1", "pp_oa", "pp_int_collab"] as const;
+
+function weightPct(benchmark: GroupBenchmark, axis: string): number {
+  return Math.round((benchmark.axis_weights[axis] ?? 0) * 100);
+}
+
+export function ComparisonInstitutionsTable({ benchmark, profileName, domain }: Props) {
+  const [selected, setSelected] = useState<GroupBenchmarkRow | null>(null);
+
+  const columns = useMemo<Column<GroupBenchmarkRow>[]>(() => {
+    const cols: Column<GroupBenchmarkRow>[] = [
+      { key: "rank", label: t("comparisonTable.colRank"), numeric: true, sortValue: (r) => r.rank, render: (r) => r.rank ?? dash() },
+      {
+        key: "name",
+        label: t("comparisonTable.colInstitution"),
+        sortValue: (r) => r.name ?? r.ror_id,
+        render: (r) => (
+          <>
+            {r.name ?? r.ror_id}
+            {r.is_own && <span className="ml-1.5 text-xs text-brand-600">{t("comparisonTable.ownTag")}</span>}
+            {r.country_code && <span className="ml-1.5 text-xs text-gray-400">{r.country_code}</span>}
+            {!r.has_data && <span className="block text-xs text-gray-400">{t("comparisonTable.noData")}</span>}
+            {r.has_data && !r.compared && (
+              <span className="block text-xs text-gray-400">{t("comparisonTable.belowThreshold")}</span>
+            )}
+          </>
+        ),
+      },
+      {
+        key: "p",
+        label: t("indicator.p"),
+        numeric: true,
+        sortValue: (r) => r.p,
+        render: (r) => (r.p != null ? r.p.toLocaleString("fr-FR") : dash()),
+      },
+      ...TABLE_IMPACT.map(
+        (key): Column<GroupBenchmarkRow> => ({
+          key,
+          label: t(`indicator.${key}`),
+          numeric: true,
+          sortValue: (r) => r.impact[key] ?? null,
+          render: (r) => percent(r.impact[key]),
+        }),
+      ),
+    ];
+    if (benchmark.specialization_applicable) {
+      cols.push({
+        key: "specialization_rate",
+        label: t("comparisonTable.colSpecialization"),
+        numeric: true,
+        sortValue: (r) => r.specialization_rate,
+        render: (r) => percent(r.specialization_rate),
+      });
     }
-  }
+    cols.push(
+      {
+        key: "quality_coefficient",
+        label: t("comparisonTable.colQuality"),
+        numeric: true,
+        sortValue: (r) => r.quality?.estimates.global ?? null,
+        render: (r) =>
+          r.quality ? `×${r.quality.estimates.global.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}` : dash(),
+      },
+      {
+        key: "quality_pp_top10",
+        label: t("comparisonTable.colQualityTop10"),
+        numeric: true,
+        sortValue: (r) => r.quality?.top["10"]?.share ?? null,
+        render: (r) => percent(r.quality?.top["10"]?.share),
+      },
+      {
+        key: "composite_score",
+        label: t("comparisonTable.colScore"),
+        numeric: true,
+        sortValue: (r) => r.composite_score,
+        render: (r) =>
+          r.composite_score === null ? (
+            dash()
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSelected(r)}
+              className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline"
+              aria-label={t("comparisonTable.scoreButtonLabel", { name: r.name ?? r.ror_id })}
+            >
+              <Calculator size={12} className="opacity-60" />
+              {r.composite_score}
+            </button>
+          ),
+      },
+    );
+    return cols;
+  }, [benchmark]);
 
-  if (!groupId || !weightProfileId) return null;
-  if (isLoading) return <div className="mt-3 text-xs text-gray-400">{t("common.computing")}</div>;
-  if (error) return <div className="mt-3 text-xs text-red-600">{t("comparisonTable.computeError")}</div>;
-  if (!data || data.rows.length === 0) return null;
-
-  const sorted = [...data.rows].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    if (av === null && bv === null) return 0;
-    if (av === null) return 1;
-    if (bv === null) return -1;
-    const cmp = typeof av === "string" ? av.localeCompare(bv as string) : (av as number) - (bv as number);
-    return sortDir === "asc" ? cmp : -cmp;
-  });
+  const domainLabel = t(`openalexDomain.${domain}`);
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center gap-2 mb-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t("comparisonTable.title")}</h3>
-        <InfoTooltip
-          text={
-            data.specificity_note +
-            (data.field !== "All sciences" ? t("comparisonTable.tooltipDomain") : "") +
-            t("comparisonTable.tooltipQuality") +
-            t("comparisonTable.tooltipEdition", {
-              headline:
-                data.headline_column === "pp_top_10"
-                  ? t("comparisonTable.tooltipHeadlinePpTop10")
-                  : t("comparisonTable.tooltipHeadlinePp10Cits"),
-              year: data.snapshot_year ?? "…",
-            })
-          }
+    <section className="mb-10">
+      <h2 className="text-base font-semibold text-gray-800 mb-2">{t("comparisonTable.title")}</h2>
+
+      <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900 space-y-1 leading-relaxed">
+        <p className="font-semibold">{t("comparisonTable.explainTitle")}</p>
+        <p>
+          <strong>{t("comparisonTable.explainImpactLabel")}</strong>{" "}
+          {t("comparisonTable.explainImpact", {
+            start: benchmark.period_start ?? "…",
+            end: benchmark.period_end ?? "…",
+            domain: domainLabel,
+          })}
+        </p>
+        <p>
+          <strong>{t("comparisonTable.explainSpecializationLabel")}</strong>{" "}
+          {benchmark.specialization_applicable
+            ? t("comparisonTable.explainSpecialization", { domain: domainLabel })
+            : t("comparisonTable.explainSpecializationNA")}
+        </p>
+        <p>
+          <strong>{t("comparisonTable.explainQualityLabel")}</strong> {t("comparisonTable.explainQuality")}
+        </p>
+        <p>
+          <strong>{t("comparisonTable.explainScoreLabel")}</strong>{" "}
+          {t("comparisonTable.explainScore", {
+            impact: weightPct(benchmark, "impact_scientifique"),
+            spec: weightPct(benchmark, "specificite_disciplinaire"),
+            quality: weightPct(benchmark, "qualite"),
+            profile: profileName ?? "",
+            min: benchmark.min_publications,
+          })}
+        </p>
+      </div>
+
+      <DataTable
+        columns={columns}
+        rows={benchmark.rows}
+        rowKey={(r) => r.ror_id}
+        initialSort={{ key: "composite_score", dir: "desc" }}
+        isHighlighted={(r) => r.is_own}
+      />
+
+      {selected && selected.composite_score !== null && (
+        <ScoreBreakdownModal
+          open
+          onClose={() => setSelected(null)}
+          institutionName={selected.name ?? selected.ror_id}
+          compositeScore={selected.composite_score}
+          breakdown={selected.breakdown}
+          profileName={profileName}
         />
-      </div>
-      <div className="overflow-x-auto border rounded-lg">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              {COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => toggleSort(col.key)}
-                  className={`py-1.5 px-2 text-xs font-medium text-gray-500 select-none cursor-pointer hover:text-gray-800 whitespace-nowrap ${
-                    col.numeric ? "text-right" : "text-left"
-                  }`}
-                >
-                  <span className={`inline-flex items-center gap-1 ${col.numeric ? "flex-row-reverse" : ""}`}>
-                    {col.label}
-                    {sortKey === col.key ? (
-                      sortDir === "desc" ? <ArrowDown size={11} /> : <ArrowUp size={11} />
-                    ) : (
-                      <ArrowUpDown size={11} className="opacity-30" />
-                    )}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {sorted.map((row) => (
-              <Row key={row.ror_id} row={row} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function Row({ row }: { row: PeerComparisonRow }) {
-  return (
-    <tr className={row.is_own ? "bg-brand-50 font-medium" : undefined}>
-      <td className="py-2 px-2 text-gray-800">
-        {row.name ?? row.ror_id}
-        {row.is_own && <span className="ml-1.5 text-xs text-brand-600">{t("comparisonTable.ownTag")}</span>}
-        {row.country_code && <span className="ml-1.5 text-xs text-gray-400">{row.country_code}</span>}
-      </td>
-      <td className="py-2 px-2 text-right text-gray-600 tabular-nums">
-        {row.p_total != null ? Math.round(row.p_total).toLocaleString("fr-FR") : t("common.dash")}
-      </td>
-      <td className="py-2 px-2 text-right text-gray-600 tabular-nums">
-        {row.headline_value != null ? `${row.headline_value}%` : t("common.dash")}
-      </td>
-      <td className="py-2 px-2 text-right text-gray-600 tabular-nums">
-        {row.oa_pct != null ? `${row.oa_pct}%` : t("common.dash")}
-      </td>
-      <td className="py-2 px-2 text-right text-gray-600 tabular-nums">
-        {row.collab_pct != null ? `${row.collab_pct}%` : t("common.dash")}
-      </td>
-      <td className="py-2 px-2 text-right text-gray-600 tabular-nums">
-        {row.herfindahl_simplified != null ? row.herfindahl_simplified.toFixed(3) : t("common.dash")}
-      </td>
-      <td className="py-2 px-2 text-right text-gray-600 tabular-nums">
-        {row.quality_coefficient != null ? `×${row.quality_coefficient.toLocaleString("fr-FR")}` : t("common.dash")}
-      </td>
-      <td className="py-2 px-2 text-right font-semibold text-brand-700 tabular-nums">
-        {row.composite_score}
-      </td>
-    </tr>
+      )}
+    </section>
   );
 }

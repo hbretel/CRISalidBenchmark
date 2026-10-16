@@ -21,10 +21,14 @@ class WeightProfile(Base):
           "collab_intl_pct": 0.15
         },
         "specificite_disciplinaire": {
-          "herfindahl": 0.7,
-          "nb_topics_signature": 0.3
+          "taux_specialisation": 1.0
         }
       }
+
+    The weighting *within* the "qualite" axis (grid categories) is not part
+    of a profile: it is instance-wide, set on the "Paramètres d'évaluation
+    qualitative" page (instance_config.quality_category_weights). Only the
+    axis weight of "qualite" lives here.
 
     `impact_normalise_leiden` is an ABSTRACT key, not a literal leiden_snapshot
     column name: indicators_impact.py resolves it to pp_top_10 (core-only toggle)

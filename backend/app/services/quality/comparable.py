@@ -1,11 +1,24 @@
-"""Peer-comparable quality axis (evaluation grid criteria countable in OpenAlex).
+"""Per-institution OpenAlex counts behind the comparison-group benchmark
+(services/group_benchmark.py): impact indicators and quality axis.
 
-The full grid is evaluated per work, which needs the works themselves — only
-ingested for the reference institution. For the benchmark, every institution
-(reference included, for a like-for-like comparison) is instead described by
-the share of its publications in the current Leiden window meeting each grid
-criterion that an OpenAlex filter can count: one `meta.count` query per
-criterion, cached per institution (peer_quality_counts).
+Only the reference institution's works are ingested. For the benchmark, every
+institution (reference included, for a like-for-like comparison) is described
+by the number of its publications in the current Leiden window meeting each
+evaluation-grid criterion that an OpenAlex filter can count. One query per
+criterion, grouped by OpenAlex domain (group_by=primary_topic.domain.id): the
+groups give the per-domain counts and meta.count the all-domains count, at the
+cost of a plain count. Cached per institution (peer_quality_counts):
+
+    {"_total": n, "<criterion>": n, ..., "by_domain": {"1": {"_total": n, ...}, ...}}
+
+The domain of a work is the domain of its primary topic — one domain per
+work, no fractional counting; works without a primary topic only appear in the
+all-domains counts.
+
+Criteria that mirror Leiden impact indicators (citations, open access,
+collaboration — IMPACT_CRITERIA) are reported as impact indicators of the
+benchmark and left out of the quality estimate below, so they are not counted
+twice in the global score.
 
 From those shares and the *current* grid weights (instance overrides included),
 an estimated quality coefficient is derived per grid category:
@@ -19,6 +32,24 @@ modulator chains one level deep. It is an approximation of the per-work
 coefficient shown in "Qualité des publications" — which uses ~190 criteria
 and the real answer combinations — but it is computed identically for every
 institution, which is what a percentile within the peer group requires.
+
+Weighting between categories (instance-wide, "Paramètres d'évaluation
+qualitative" page, instance_config.quality_category_weights): weights w_k
+summing to 1 over the three categories. They set
+  - the quality axis score: Σ w_k × percentile_k;
+  - the global coefficient: ln(global) = 3 × Σ w_k × ln(coef_k) — equal
+    thirds give back the grid's own product of the category coefficients.
+
+Leiden-like indicators (P, P/PP top 50 / 25 / 10 % in quality): under the same
+independence assumption, the shares above describe for each institution the
+distribution of the (weighted) per-publication log-coefficient — a sum of
+independent two-valued terms, computed exactly by convolution on a 1e-3 grid.
+The thresholds of the top 50 / 25 / 10 % are taken on the pooled publications
+of the institutions compared (comparison group + reference institution,
+above the instance's minimum publication count), and
+publications exactly at a threshold are counted fractionally, as Leiden does
+for citation ties — so the pooled PP(top x %) is exactly x %. Everything is
+computed on one scope at a time (all domains, or one OpenAlex domain).
 """
 
 import asyncio
@@ -26,6 +57,7 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +108,22 @@ COMPARABLE_FILTERS: dict[str, str] = {
     "107": "fwci:>0.9999",
 }
 TOTAL_KEY = "_total"
+DOMAIN_KEY = "by_domain"
+
+# Benchmark impact indicator → criterion whose share it is (Leiden
+# counterparts: PP(top 1 %), PP(top 10 %), ~MNCS > 1, PP(≥ 10 cits),
+# share cited, PP(OA), PP(int. collab), PP(industry collab)).
+IMPACT_CRITERIA: dict[str, str] = {
+    "pp_top_1": "106.1",
+    "pp_top_10": "106",
+    "pp_fwci_1": "107",
+    "pp_10_cits": "69",
+    "pp_cited": "65",
+    "pp_oa": "4",
+    "pp_int_collab": "14.4",
+    "pp_industry_collab": "14.3",
+}
+QUALITY_EXCLUDED = set(IMPACT_CRITERIA.values())
 
 # Grid category → weight-profile sub-indicator of the "qualite" axis.
 CATEGORY_KEYS = {
@@ -84,6 +132,9 @@ CATEGORY_KEYS = {
     "Facteurs extrinsèques ex-post": "qualite_ex_post",
 }
 SUB_INDICATORS = list(CATEGORY_KEYS.values())
+DEFAULT_CATEGORY_WEIGHTS = {key: 1 / len(SUB_INDICATORS) for key in SUB_INDICATORS}
+TOP_LEVELS = (50, 25, 10)
+_LOG_STEP = 1e-3
 
 CACHE_TTL_DAYS = 90
 _CONCURRENCY = 4
@@ -96,20 +147,37 @@ def _base_filter(openalex_id: str, years: tuple[int, int]) -> str:
     return f"authorships.institutions.lineage:{short},publication_year:{span}"
 
 
-async def fetch_counts(client: OpenAlexClient, openalex_id: str, years: tuple[int, int]) -> dict[str, int]:
+async def fetch_counts(client: OpenAlexClient, openalex_id: str, years: tuple[int, int]) -> dict:
     base = _base_filter(openalex_id, years)
     sem = asyncio.Semaphore(_CONCURRENCY)
 
-    async def count(extra: str) -> int:
+    async def count(extra: str) -> tuple[int, dict[str, int]]:
         async with sem:
             data = await client.get_with_retry(
-                "/works", params={"filter": f"{base},{extra}" if extra else base, "per-page": 1, "select": "id"}
+                "/works",
+                params={"filter": f"{base},{extra}" if extra else base, "group_by": "primary_topic.domain.id"},
             )
-            return int(data.get("meta", {}).get("count", 0))
+        by_domain = {
+            g["key"].rsplit("/", 1)[-1]: int(g.get("count", 0)) for g in data.get("group_by", []) if g.get("key")
+        }
+        return int(data.get("meta", {}).get("count", 0)), by_domain
 
     keys = [TOTAL_KEY, *COMPARABLE_FILTERS]
-    values = await asyncio.gather(*(count(COMPARABLE_FILTERS.get(k, "")) for k in keys))
-    return dict(zip(keys, values))
+    results = await asyncio.gather(*(count(COMPARABLE_FILTERS.get(k, "")) for k in keys))
+    counts: dict = {key: total for key, (total, _) in zip(keys, results)}
+    domains: dict[str, dict[str, int]] = {}
+    for key, (_, by_domain) in zip(keys, results):
+        for domain, n in by_domain.items():
+            domains.setdefault(domain, {})[key] = n
+    counts[DOMAIN_KEY] = domains
+    return counts
+
+
+def counts_for(counts: dict, domain: str | None) -> dict:
+    """Counts on one OpenAlex domain ("1".."4"), or all domains if None."""
+    if domain is None:
+        return counts
+    return (counts.get(DOMAIN_KEY) or {}).get(domain, {TOTAL_KEY: 0})
 
 
 async def ensure_counts(
@@ -126,13 +194,14 @@ async def ensure_counts(
         and (row.period_start, row.period_end) == years
         and row.fetched_at > datetime.now(timezone.utc) - timedelta(days=CACHE_TTL_DAYS)
         and set(COMPARABLE_FILTERS) <= set(row.counts)
+        and DOMAIN_KEY in row.counts
     )
     if fresh and not force:
         return row.counts
     try:
         counts = await fetch_counts(client, openalex_id, years)
     except Exception as exc:
-        logger.warning("Quality counts failed for %s: %s", openalex_id, exc)
+        logger.warning("Benchmark counts failed for %s: %s", openalex_id, exc)
         return row.counts if row else None
     async with AsyncSessionLocal() as session:
         stmt = pg_insert(PeerQualityCount).values(
@@ -158,15 +227,19 @@ async def cached_counts_by_ror(session: AsyncSession, ror_ids: list[str], years:
             PeerQualityCount.period_end == years[1],
         )
     )).scalars().all()
-    return {r.ror_id: r.counts for r in rows}
+    # Rows from before the per-domain breakdown are treated as missing (they
+    # are refetched by the next peer-cache fill).
+    return {r.ror_id: r.counts for r in rows if DOMAIN_KEY in r.counts}
 
 
 def criteria_terms() -> list[dict]:
-    """The comparable criteria with their current (effective) grid weight and
-    role, shared by every institution's estimate."""
+    """The comparable quality criteria (impact ones excluded) with their current
+    (effective) grid weight and role, shared by every institution's estimate."""
     criteria = grid.load_criteria()
     terms = []
     for cid in COMPARABLE_FILTERS:
+        if cid in QUALITY_EXCLUDED:
+            continue
         row = criteria.get(cid)
         if row is None:
             continue
@@ -194,24 +267,100 @@ def criteria_terms() -> list[dict]:
     return terms
 
 
-def estimate(counts: dict, terms: list[dict]) -> dict[str, float] | None:
-    """Estimated coefficient per sub-indicator, plus "global" (their product)."""
+def normalize_category_weights(weights: dict | None) -> dict[str, float]:
+    """Instance category weights, defaulting to equal thirds; renormalized to
+    sum to 1 (unknown keys ignored)."""
+    if not weights:
+        return dict(DEFAULT_CATEGORY_WEIGHTS)
+    clean = {key: max(float(weights.get(key, 0.0) or 0.0), 0.0) for key in SUB_INDICATORS}
+    total = sum(clean.values())
+    return {k: v / total for k, v in clean.items()} if total > 0 else dict(DEFAULT_CATEGORY_WEIGHTS)
+
+
+def _term_log(term: dict) -> float:
+    if term["role"] == "coefficient":
+        return math.log(max(term["weight"], _MIN_WEIGHT))
+    w = max(term["target_weight"], _MIN_WEIGHT)
+    return math.log(max(1.0 + (w - 1.0) * term["factor"], _MIN_WEIGHT)) - math.log(w)
+
+
+def _term_share(counts: dict, term: dict, total: int) -> float:
+    share = min(1.0, counts.get(term["id"], 0) / total)
+    return 1.0 - share if term["negated"] else share
+
+
+def estimate(counts: dict, terms: list[dict], weights: dict[str, float] | None = None) -> dict[str, float] | None:
+    """Estimated coefficient per sub-indicator, plus "global" (their weighted
+    geometric combination, see module docstring)."""
     total = counts.get(TOTAL_KEY) or 0
     if total <= 0:
         return None
+    weights = weights or DEFAULT_CATEGORY_WEIGHTS
     logs = {key: 0.0 for key in SUB_INDICATORS}
     for term in terms:
-        share = min(1.0, counts.get(term["id"], 0) / total)
-        if term["negated"]:
-            share = 1.0 - share
-        if term["role"] == "coefficient":
-            logs[term["category"]] += share * math.log(max(term["weight"], _MIN_WEIGHT))
-        else:
-            w = max(term["target_weight"], _MIN_WEIGHT)
-            modulated = max(1.0 + (w - 1.0) * term["factor"], _MIN_WEIGHT)
-            logs[term["category"]] += share * (math.log(modulated) - math.log(w))
+        logs[term["category"]] += _term_share(counts, term, total) * _term_log(term)
     out = {key: math.exp(v) for key, v in logs.items()}
-    out["global"] = math.exp(sum(logs.values()))
+    out["global"] = math.exp(len(SUB_INDICATORS) * sum(weights[k] * v for k, v in logs.items()))
+    return out
+
+
+def log_distribution(counts: dict, terms: list[dict], weights: dict[str, float]) -> tuple[int, np.ndarray]:
+    """Distribution of the weighted per-publication log-coefficient when each
+    criterion holds independently with its observed share, on a grid of
+    _LOG_STEP: (offset, probabilities) — probabilities[i] is the mass of the
+    bin offset + i."""
+    total = counts.get(TOTAL_KEY) or 0
+    offset, dist = 0, np.ones(1)
+    if total <= 0:
+        return offset, dist
+    n = len(SUB_INDICATORS)
+    for term in terms:
+        step = round(n * weights[term["category"]] * _term_log(term) / _LOG_STEP)
+        share = _term_share(counts, term, total)
+        if step == 0 or share <= 0.0:
+            continue
+        if share >= 1.0:
+            offset += step
+            continue
+        nxt = np.zeros(len(dist) + abs(step))
+        if step > 0:
+            nxt[: len(dist)] += dist * (1.0 - share)
+            nxt[step:] += dist * share
+        else:
+            nxt[-step:] += dist * (1.0 - share)
+            nxt[: len(dist)] += dist * share
+            offset += step
+        dist = nxt
+    return offset, dist
+
+
+def top_shares(distributions: dict[str, tuple[int, np.ndarray]], sizes: dict[str, int]) -> dict[str, dict[int, float]]:
+    """{ror: {level: share of its publications in the pooled top level %}}."""
+    grand_total = sum(sizes[r] for r in distributions)
+    if grand_total <= 0:
+        return {}
+    lo = min(off for off, _ in distributions.values())
+    hi = max(off + len(d) for off, d in distributions.values())
+    aligned = {}
+    for ror, (off, d) in distributions.items():
+        full = np.zeros(hi - lo)
+        full[off - lo: off - lo + len(d)] = d
+        aligned[ror] = full
+    pooled = sum(aligned[r] * (sizes[r] / grand_total) for r in aligned)
+    # Mass strictly above each bin, from the highest bin down.
+    above = np.concatenate([np.cumsum(pooled[::-1])[::-1][1:], [0.0]])
+    out: dict[str, dict[int, float]] = {ror: {} for ror in distributions}
+    for level in TOP_LEVELS:
+        target = level / 100.0
+        # Threshold bin: the highest bin whose inclusion reaches the target.
+        candidates = np.nonzero((above < target - 1e-12) & (above + pooled >= target - 1e-12) & (pooled > 0))[0]
+        if len(candidates) == 0:
+            continue
+        k = candidates[-1]
+        fraction = (target - above[k]) / pooled[k]
+        for ror, full in aligned.items():
+            share = full[k + 1:].sum() + fraction * full[k]
+            out[ror][level] = float(min(max(share, 0.0), 1.0))
     return out
 
 
@@ -231,23 +380,67 @@ async def current_window(session: AsyncSession) -> tuple[int, int] | None:
     return await _current_leiden_window(session)
 
 
-async def quality_axis(session: AsyncSession, ror_ids: list[str]) -> dict[str, dict]:
-    """{ror_id: {"estimates": {sub: coef, "global": coef}, "percentiles": {sub: 0-100}}}
-    for the institutions in `ror_ids` that have cached counts for the current
-    window. Percentiles are taken among those institutions only. Read-only:
-    counts are fetched by the peer-cache fill and the nightly quality job,
-    never during a request."""
-    years = await current_window(session)
-    counts = await cached_counts_by_ror(session, ror_ids, years)
-    terms = criteria_terms()
-    estimates = {ror: est for ror, c in counts.items() if (est := estimate(c, terms)) is not None}
+async def category_weights(session: AsyncSession) -> dict[str, float]:
+    from app.models.instance_config import InstanceConfig
+
+    stored = (await session.execute(
+        select(InstanceConfig.quality_category_weights).where(InstanceConfig.id == 1)
+    )).scalar_one_or_none()
+    return effective_category_weights(stored, active_categories(criteria_terms()))
+
+
+def effective_category_weights(weights: dict | None, active: set[str]) -> dict[str, float]:
+    """Instance weights with every inactive category (no non-neutral criterion
+    outside the impact ones — see active_categories) forced to 0 and the
+    others renormalized, for as long as the grid gives it no valid criterion.
+    Applies to the axis score and to the global coefficient alike."""
+    weights = normalize_category_weights(weights)
+    kept = {k: (w if k in active else 0.0) for k, w in weights.items()}
+    total = sum(kept.values())
+    if total <= 0:
+        # Stored weights only on inactive categories: equal weights on the active ones.
+        kept = {k: (1.0 if k in active else 0.0) for k in weights}
+        total = sum(kept.values())
+    return {k: w / total for k, w in kept.items()} if total > 0 else weights
+
+
+def active_categories(terms: list[dict]) -> set[str]:
+    """Categories with at least one non-neutral criterion. Since the impact
+    criteria moved out of the quality axis, a category can be left with
+    neutral weights only (ex-post, with the default grid): its coefficient is
+    1 for everyone, so it is excluded from the axis score rather than giving
+    every institution the 50th percentile."""
+    return {t["category"] for t in terms if abs(_term_log(t)) > 1e-12}
+
+
+def quality_scores(counts_by_ror: dict[str, dict], terms: list[dict], weights: dict[str, float]) -> dict[str, dict]:
+    """{ror: {"estimates": {sub: coef, "global": coef}, "percentiles": {sub: 0-100 | None},
+    "axis_score", "top": {"50"|"25"|"10": {"share", "count"}}}} for the
+    institutions given (counts already restricted to one scope). Percentiles
+    and top-x % thresholds are taken among them only; inactive categories
+    (active_categories) get no percentile and their weight is redistributed."""
+    active = active_categories(terms)
+    active_weight = sum(weights[k] for k in SUB_INDICATORS if k in active)
+    estimates = {ror: est for ror, c in counts_by_ror.items() if (est := estimate(c, terms, weights)) is not None}
+    sizes = {ror: int(counts_by_ror[ror][TOTAL_KEY]) for ror in estimates}
+    tops = top_shares({ror: log_distribution(counts_by_ror[ror], terms, weights) for ror in estimates}, sizes)
     result = {}
     for ror, est in estimates.items():
+        percentiles = {
+            key: percentile_midrank(est[key], [e[key] for e in estimates.values()]) if key in active else None
+            for key in SUB_INDICATORS
+        }
+        axis_score = (
+            sum(weights[k] * percentiles[k] for k in SUB_INDICATORS if k in active) / active_weight
+            if active_weight > 0 else None
+        )
         result[ror] = {
             "estimates": {k: round(v, 4) for k, v in est.items()},
-            "percentiles": {
-                key: percentile_midrank(est[key], [e[key] for e in estimates.values()]) for key in SUB_INDICATORS
+            "percentiles": percentiles,
+            "axis_score": round(axis_score, 1) if axis_score is not None else None,
+            "top": {
+                str(level): {"share": round(100 * share, 1), "count": round(share * sizes[ror])}
+                for level, share in tops.get(ror, {}).items()
             },
-            "global_percentile": percentile_midrank(est["global"], [e["global"] for e in estimates.values()]),
         }
     return result

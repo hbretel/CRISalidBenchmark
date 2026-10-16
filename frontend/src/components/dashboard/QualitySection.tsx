@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { FileCheck2, Gauge, ListChecks } from "lucide-react";
 import { api } from "@/lib/api";
-import type { QualityHistogramBin, QualitySummary, QualityWorksPage } from "@/types/api";
+import type { GroupBenchmark, QualityHistogramBin, QualitySummary, QualityWorksPage } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { QualityCriteriaTable } from "./QualityCriteriaTable";
@@ -14,11 +14,15 @@ import { QualityBenchmarkCard } from "./QualityBenchmarkCard";
 import { t } from "@/lib/i18n";
 
 interface Props {
-  coreOnly: boolean;
-  peerGroupId: number | null;
+  /** Group benchmark (quality axis of every institution of the group), if a group is selected. */
+  benchmark?: GroupBenchmark;
   periodStart: number | null;
   periodEnd: number | null;
 }
+
+// The "Groupes de comparaison" tab has no "core publications" filter: the
+// whole synced corpus is evaluated.
+const coreOnly = false;
 
 function formatDate(iso: string | null | undefined): string {
   return iso ? new Intl.DateTimeFormat("fr-FR").format(new Date(iso)) : t("common.dash");
@@ -55,7 +59,7 @@ function binLabel(bin: QualityHistogramBin): string {
     : t("quality.histogramRange", { start: bin.start, end: bin.end });
 }
 
-export function QualitySection({ coreOnly, peerGroupId, periodStart, periodEnd }: Props) {
+export function QualitySection({ benchmark, periodStart, periodEnd }: Props) {
   const { data, error, isLoading } = useSWR<QualitySummary>(
     `/quality/summary?core_only=${coreOnly}`,
     (url: string) => api.get<QualitySummary>(url),
@@ -66,7 +70,7 @@ export function QualitySection({ coreOnly, peerGroupId, periodStart, periodEnd }
       <h2 className="text-base font-semibold text-gray-800 mb-1">{t("quality.title")}</h2>
       <p className="text-sm text-gray-500 mb-2">{t("quality.subtitle")}</p>
       <div className="flex flex-wrap items-center gap-1.5 mb-4">
-        <FilterChip label={coreOnly ? t("filters.core") : t("filters.allPublications")} variant="active" />
+        <FilterChip label={t("filters.allPublications")} variant="active" />
         {periodStart && periodEnd && <FilterChip label={`${periodStart}–${periodEnd}`} />}
         <FilterChip label={t("quality.allDomainsChip")} />
         <InfoTooltip text={t("quality.domainNote")} />
@@ -87,20 +91,12 @@ export function QualitySection({ coreOnly, peerGroupId, periodStart, periodEnd }
           )}
         </div>
       )}
-      {data?.available && <QualityContent data={data} coreOnly={coreOnly} peerGroupId={peerGroupId} />}
+      {data?.available && <QualityContent data={data} benchmark={benchmark} />}
     </section>
   );
 }
 
-function QualityContent({
-  data,
-  coreOnly,
-  peerGroupId,
-}: {
-  data: QualitySummary;
-  coreOnly: boolean;
-  peerGroupId: number | null;
-}) {
+function QualityContent({ data, benchmark }: { data: QualitySummary; benchmark?: GroupBenchmark }) {
   const coefficient = data.coefficient;
   const sources = data.sources;
 
@@ -130,7 +126,7 @@ function QualityContent({
         />
       </div>
 
-      {peerGroupId && <QualityBenchmarkCard peerGroupId={peerGroupId} />}
+      {benchmark && <QualityBenchmarkCard benchmark={benchmark} />}
 
       {coefficient && (
         <div className="bg-white border rounded-lg p-4">
@@ -170,7 +166,7 @@ function QualityContent({
 
       {data.categories && <QualityCriteriaTable categories={data.categories} />}
 
-      <QualityWorksList coreOnly={coreOnly} />
+      <QualityWorksList />
 
       {sources && (
         <div className="text-xs text-gray-400 space-y-1">
@@ -193,7 +189,7 @@ function QualityContent({
   );
 }
 
-function QualityWorksList({ coreOnly }: { coreOnly: boolean }) {
+function QualityWorksList() {
   const [order, setOrder] = useState<"desc" | "asc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
   const { data } = useSWR<QualityWorksPage>(

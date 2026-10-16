@@ -9,6 +9,7 @@ export interface ConfigResponse {
   api_key_set: boolean;
   contact_email: string;
   country_code: string | null;
+  min_publications: number;
   configured_at: string;
 }
 
@@ -44,66 +45,35 @@ export interface InstitutionSummary {
   leiden_decile_label: string | null;
 }
 
-export interface SynthesisCounts {
-  field: string;
-  core_only: boolean;
-  source: "openalex" | "leiden";
-  publications: number | null;
-  citations: number | null;
+/** Leiden Ranking indicators of one university ("Monde entier" tab). Proportions in %. */
+export interface WorldRow {
+  ror_id: string;
+  name: string | null;
+  country_code: string | null;
+  is_own: boolean;
+  /** P ≥ the instance's minimum publication count: ranked. */
+  compared: boolean;
+  p: number | null;
+  [indicator: string]: string | number | boolean | null;
 }
 
-export interface Indicator {
+export interface WorldOwnIndicator {
   value: number | null;
+  rank: number | null;
   percentile: number | null;
-  source: string;
-  description: string;
+  n: number;
 }
 
-export interface HeadlineImpactIndicator extends Indicator {
-  value_lb: number | null;
-  value_ub: number | null;
-  leiden_column: "pp_top_10" | "pp_10_cits";
-  non_equivalent_across_toggle: true;
-}
-
-export interface MncsIndicator extends Indicator {
-  value_lb: number | null;
-  value_ub: number | null;
-}
-
-export interface ImpactIndicators {
+export interface WorldRanking {
   field: string;
   core_only: boolean;
   snapshot_year: number | null;
-  period_start: number | null;
-  period_end: number | null;
-  peer_group_size: number;
-  indicators: {
-    // Toggle-dependent: pp_top_10 (core_only=true) or pp_10_cits (core_only=false).
-    // These are NOT equivalent indicators — see leiden_column + description.
-    impact_normalise_leiden: HeadlineImpactIndicator;
-    mncs: MncsIndicator;
-    citations_brutes_moyennes: Indicator;
-    h_index_core: Indicator;
-    oa_pct: Indicator;
-    collab_intl_pct: Indicator;
-  };
-}
-
-export interface HerfindahlIndex {
-  value: number;
-  label: string;
-  explanation: string;
-  description: string;
-}
-
-export interface SignatureTopic {
-  topic_id: string;
-  topic_name: string;
-  own_publication_count: number;
-  own_share_permille: number;
-  peer_avg_share_permille: number;
-  ratio: number;
+  period: string | null;
+  min_publications: number;
+  /** Indicator columns available for this toggle (besides P). */
+  indicators: string[];
+  rows: WorldRow[];
+  own: { compared: boolean; n_compared: number; indicators: Record<string, WorldOwnIndicator> } | null;
 }
 
 /** Domain > Field > Subfield > Topic node — `children` is absent on leaves (Topics). */
@@ -114,17 +84,38 @@ export interface TopicTreeNode {
   children?: TopicTreeNode[];
 }
 
-export interface SpecificityIndicators {
+export interface ThematicProfile {
   thematic_profile: TopicTreeNode[];
-  herfindahl: HerfindahlIndex;
-  topics_signature: {
-    items: SignatureTopic[];
-    threshold: number;
-    peer_cache_populated: boolean;
-    description: string;
-  };
   total_works_analysed: number;
-  peer_group_size: number;
+}
+
+export interface SignatureTopic {
+  topic_id: string;
+  topic_name: string;
+  subfield_name: string | null;
+  field_name: string | null;
+  own_publications: number;
+  own_share_permille: number;
+  own_top10_pct: number;
+  own_oa_pct: number;
+  own_intl_pct: number;
+  own_score: number;
+  runner_up_score: number | null;
+  runner_up_name: string | null;
+  margin: number | null;
+  n_compared: number;
+}
+
+export interface TopicsSignature {
+  min_publications: number;
+  period_start: number | null;
+  period_end: number | null;
+  group_size: number;
+  institutions_with_data: number;
+  own_cache_populated: boolean;
+  peer_cache_populated: boolean;
+  axis_weights: Record<string, number>;
+  items: SignatureTopic[];
 }
 
 export interface PeerGroupSummary {
@@ -170,41 +161,73 @@ export interface LeidenSummary {
   imported_at: string | null;
 }
 
-export interface PeerComparisonRow {
-  quality_coefficient: number | null;
-  quality_axis_score: number | null;
+export interface ScoreComponent {
+  key: string;
+  value: number | null;
+  unit: string;
+  percentile: number | null;
+  weight: number;
+  /** Weight actually applied after renormalization; null if left out (no data or zero weight). */
+  applied_weight: number | null;
+}
+
+export interface ScoreAxis {
+  axis: "impact_scientifique" | "specificite_disciplinaire" | "qualite";
+  applicable: boolean;
+  score: number | null;
+  weight: number;
+  applied_weight: number | null;
+  contribution: number | null;
+  components: ScoreComponent[];
+}
+
+/** Leiden-like quality indicators: P / PP in the top 50 / 25 / 10 % in quality. */
+export type QualityTop = Record<"50" | "25" | "10", { share: number; count: number }>;
+
+export type QualityCategoryWeights = Record<"qualite_ex_ante" | "qualite_intrinseque" | "qualite_ex_post", number>;
+
+export interface InstitutionQuality {
+  estimates: Record<string, number>;
+  /** null for a category without any non-neutral criterion (excluded from the axis). */
+  percentiles: Record<string, number | null>;
+  axis_score: number | null;
+  top: QualityTop;
+}
+
+export interface GroupBenchmarkRow {
   ror_id: string;
   name: string | null;
   country_code: string | null;
   is_own: boolean;
-  p_total: number | null;
-  headline_value: number | null;
-  headline_percentile: number | null;
-  mncs: number | null;
-  oa_pct: number | null;
-  collab_pct: number | null;
-  herfindahl_simplified: number | null;
-  impact_axis_score: number;
-  specificity_axis_score: number;
-  composite_score: number;
+  /** Counts cached for this institution (peer cache filled). */
+  has_data: boolean;
+  /** P ≥ the instance's minimum publication count on the scope: percentiles, rank and score. */
+  compared: boolean;
+  p: number | null;
+  impact: Record<string, number | null>;
+  impact_percentiles: Record<string, number | null>;
+  specialization_rate: number | null;
+  specialization_percentile: number | null;
+  quality: InstitutionQuality | null;
+  composite_score: number | null;
+  rank: number | null;
+  breakdown: ScoreAxis[];
 }
 
-export interface PeerComparisonTable {
-  rows: PeerComparisonRow[];
-  snapshot_year: number | null;
-  core_only: boolean;
-  field: string;
-  headline_column: "pp_top_10" | "pp_10_cits";
-  specificity_note: string;
-}
-
-export interface CompositeScore {
-  weight_profile_id: number;
-  peer_group_id: number;
-  composite_score: number;
-  axis_scores: Record<string, number>;
+export interface GroupBenchmark {
+  domain: string | null;
+  period_start: number | null;
+  period_end: number | null;
+  min_publications: number;
+  group_size: number;
+  institutions_with_data: number;
+  institutions_compared: number;
+  specialization_applicable: boolean;
   axis_weights: Record<string, number>;
   sub_weights: Record<string, Record<string, number>>;
+  category_weights: QualityCategoryWeights;
+  quality_active_categories: string[];
+  rows: GroupBenchmarkRow[];
 }
 
 export interface QualityCriterion {
@@ -325,6 +348,8 @@ export interface GridCriterion {
   parameters: GridParameter[];
   automated: boolean;
   comparable: boolean;
+  /** Counted for every group institution and reported as an impact indicator. */
+  benchmark_impact: boolean;
 }
 
 export interface GridCalibration {
@@ -335,14 +360,11 @@ export interface GridCalibration {
   criteria: GridCriterion[];
 }
 
-export interface QualityBenchmark {
-  available: boolean;
-  group_size: number;
-  institutions_with_data: number;
-  n_criteria: number;
-  estimates: Record<string, number> | null;
-  percentiles: Record<string, number> | null;
-  global_percentile: number | null;
+export interface QualityCategoryWeightsResponse {
+  weights: QualityCategoryWeights;
+  is_default: boolean;
+  /** Categories without any valid criterion outside the impact ones: effective weight 0. */
+  inactive: string[];
 }
 
 export interface LlmStatus {

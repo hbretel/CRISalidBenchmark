@@ -216,7 +216,10 @@ class OpenAlexClient:
             cursor = data.get("meta", {}).get("next_cursor")
 
     async def get_topic_counts_for_institution(
-        self, institution_ids: str | list[str]
+        self,
+        institution_ids: str | list[str],
+        years: tuple[int, int] | None = None,
+        extra_filter: str = "",
     ) -> list[dict]:
         """Return per-topic publication counts for one or more institution IDs.
 
@@ -234,14 +237,23 @@ class OpenAlexClient:
         be double-counted — acceptable approximation for a volume-based
         specificity comparison (see §4.5).
 
-        Returns a list of {"key": topic_id, "key_display_name": name, "count": N}.
+        years: restricts to a publication-year window (the current Leiden
+        window, like the works ingestion). extra_filter: additional OpenAlex
+        filter clauses (e.g. "open_access.is_oa:true") — one call per
+        statistic, see services/topics_signature.py.
 
-        Dev-time note: verify the exact response field names for the grouped result.
+        Returns a list of {"key": topic_id, "key_display_name": name, "count": N}.
         """
         ids = [institution_ids] if isinstance(institution_ids, str) else list(institution_ids)
+        clauses = []
+        if years:
+            clauses.append("publication_year:" + "|".join(str(y) for y in range(years[0], years[1] + 1)))
+        if extra_filter:
+            clauses.append(extra_filter)
         merged_counts: dict[str, dict] = {}
         for chunk in _chunk_ids(ids, OR_FILTER_CHUNK_SIZE):
-            for group in await self._get_topic_counts_chunk("|".join(chunk)):
+            filter_str = ",".join([f"authorships.institutions.lineage:{'|'.join(chunk)}", *clauses])
+            for group in await self._get_topic_counts_chunk(filter_str):
                 key = group.get("key")
                 if not key:
                     continue
@@ -251,14 +263,14 @@ class OpenAlexClient:
                     merged_counts[key] = dict(group)
         return list(merged_counts.values())
 
-    async def _get_topic_counts_chunk(self, filter_value: str) -> list[dict]:
+    async def _get_topic_counts_chunk(self, filter_str: str) -> list[dict]:
         all_groups: list[dict] = []
         cursor = "*"
         while cursor:
             data = await self.get_with_retry(
                 "/works",
                 params={
-                    "filter": f"authorships.institutions.lineage:{filter_value}",
+                    "filter": filter_str,
                     "group_by": "primary_topic.id",
                     "per-page": 200,
                     "cursor": cursor,

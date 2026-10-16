@@ -6,6 +6,7 @@ import { CheckCircle, ChevronRight, RotateCcw, Search } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { GridCalibration, GridCriterion } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { CategoryWeightsPanel } from "@/components/quality/CategoryWeightsPanel";
 import { t } from "@/lib/i18n";
 
 type Filter = "all" | "automated" | "comparable" | "modified";
@@ -62,7 +63,7 @@ export default function QualitySettingsPage() {
     return criteria.filter((c) => {
       if (q && !c.id.startsWith(q) && !c.label.toLowerCase().includes(q)) return false;
       if (filter === "automated") return c.automated;
-      if (filter === "comparable") return c.comparable;
+      if (filter === "comparable") return c.comparable || c.benchmark_impact;
       if (filter === "modified") return draft[c.id] && differsFromDefault(c, draft[c.id]);
       return true;
     });
@@ -151,6 +152,9 @@ export default function QualitySettingsPage() {
         )}
       </div>
 
+      <CategoryWeightsPanel />
+
+      <h2 className="text-sm font-semibold text-gray-800 mb-1">{t("qualitySettings.gridTitle")}</h2>
       <div className="sticky top-0 z-10 bg-gray-50 py-3 mb-4 border-b space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
@@ -327,6 +331,14 @@ function CriterionRow({
               className="text-[11px] px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200"
             >
               {t("qualitySettings.badgeAutomated")}
+            </span>
+          )}
+          {c.benchmark_impact && (
+            <span
+              title={t("qualitySettings.badgeImpactTooltip")}
+              className="text-[11px] px-1.5 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200"
+            >
+              {t("qualitySettings.badgeImpact")}
             </span>
           )}
           {c.comparable && (

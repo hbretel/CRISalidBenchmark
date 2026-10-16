@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ class ConfigResponse(BaseModel):
     api_key_set: bool  # never expose the raw key
     contact_email: str
     country_code: str | None
+    min_publications: int
     configured_at: datetime
 
 
@@ -74,6 +75,7 @@ async def get_config(session: AsyncSession = Depends(get_db)) -> ConfigResponse:
         api_key_set=bool(config.openalex_api_key),
         contact_email=config.contact_email,
         country_code=config.country_code,
+        min_publications=config.min_publications,
         configured_at=config.configured_at,
     )
 
@@ -188,6 +190,7 @@ async def create_config(
         openalex_api_key=body.openalex_api_key,
         contact_email=body.contact_email,
         country_code=country_code,
+        min_publications=10,
         configured_at=datetime.now(timezone.utc),
     ).on_conflict_do_update(
         index_elements=["id"],
@@ -219,6 +222,7 @@ async def create_config(
         api_key_set=True,
         contact_email=body.contact_email,
         country_code=country_code,
+        min_publications=10,
         configured_at=datetime.now(timezone.utc),
     )
 
@@ -239,6 +243,9 @@ class ConfigUpdate(BaseModel):
     openalex_api_key: str | None = None
     contact_email: str | None = None
     institution_name: str | None = None
+    # Minimum publications for an institution to be compared on a scope
+    # (see InstanceConfig.min_publications).
+    min_publications: int | None = Field(default=None, ge=1, le=100_000)
 
 
 @router.patch("", response_model=ConfigResponse)
@@ -273,6 +280,8 @@ async def update_config(
         values["openalex_api_key"] = body.openalex_api_key
     if body.contact_email:
         values["contact_email"] = body.contact_email
+    if body.min_publications is not None:
+        values["min_publications"] = body.min_publications
 
     if not values:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -290,5 +299,6 @@ async def update_config(
         api_key_set=bool(config.openalex_api_key),
         contact_email=config.contact_email,
         country_code=config.country_code,
+        min_publications=config.min_publications,
         configured_at=config.configured_at,
     )

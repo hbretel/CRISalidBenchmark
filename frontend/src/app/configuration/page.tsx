@@ -6,7 +6,8 @@ import { api, ApiError } from "@/lib/api";
 import type { ConfigResponse } from "@/types/api";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { QualityJobPanel } from "@/components/setup/QualityJobPanel";
-import { AlertTriangle, Building2, CheckCircle, KeyRound, Mail } from "lucide-react";
+import { mutate as globalMutate } from "swr";
+import { AlertTriangle, Building2, CheckCircle, KeyRound, Mail, SlidersHorizontal } from "lucide-react";
 import { t } from "@/lib/i18n";
 
 /**
@@ -31,6 +32,7 @@ export default function ConfigurationPage() {
           <InstitutionSection config={config} onSaved={mutate} />
           <ApiKeySection onSaved={mutate} />
           <EmailSection config={config} onSaved={mutate} />
+          <MinPublicationsSection config={config} onSaved={mutate} />
           <QualityJobPanel />
         </>
       )}
@@ -224,6 +226,70 @@ function EmailSection({ config, onSaved }: { config: ConfigResponse; onSaved: ()
       {saved && (
         <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
           <CheckCircle size={13} /> {t("configuration.emailUpdated")}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function MinPublicationsSection({ config, onSaved }: { config: ConfigResponse; onSaved: () => void }) {
+  const [value, setValue] = useState(String(config.min_publications));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => setValue(String(config.min_publications)), [config.min_publications]);
+  const parsed = Number(value);
+  const valid = Number.isInteger(parsed) && parsed >= 1;
+  const changed = valid && parsed !== config.min_publications;
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await api.patch<ConfigResponse>("/config", { min_publications: parsed });
+      setSaved(true);
+      onSaved();
+      // Every percentile, rank and score depends on it.
+      await globalMutate((key) => typeof key === "string" && key.startsWith("/"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : t("configuration.genericError"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="bg-white border rounded-lg p-5 mt-4">
+      <div className="flex items-center gap-2 mb-1">
+        <SlidersHorizontal size={16} className="text-brand-600" />
+        <h2 className="text-sm font-semibold text-gray-700">{t("configuration.minPublicationsTitle")}</h2>
+      </div>
+      <p className="text-xs text-gray-500 mb-3 leading-relaxed">{t("configuration.minPublicationsIntro")}</p>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{t("configuration.minPublicationsLabel")}</label>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          min={1}
+          step={1}
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setSaved(false); }}
+          className="w-32 border rounded px-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving || !changed}
+          className="px-4 py-2 bg-brand-600 text-white text-sm rounded disabled:opacity-50"
+        >
+          {saving ? t("configuration.changing") : t("configuration.change")}
+        </button>
+      </div>
+      {!valid && <p className="text-xs text-red-600 mt-2">{t("configuration.minPublicationsInvalid")}</p>}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+      {saved && (
+        <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
+          <CheckCircle size={13} /> {t("configuration.minPublicationsUpdated")}
         </p>
       )}
     </section>

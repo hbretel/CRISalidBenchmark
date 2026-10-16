@@ -86,3 +86,34 @@ export function useCoreOnly(): [boolean, (v: boolean) => void] {
 
   return [hydrated ? value : true, set];
 }
+
+function usePersistedString<T extends string>(storageKey: string, fallback: T, valid: readonly T[]): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(fallback);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(storageKey);
+    if (raw && (valid as readonly string[]).includes(raw)) setValue(raw as T);
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  function set(v: T) {
+    setValue(v);
+    window.localStorage.setItem(storageKey, v);
+  }
+
+  return [hydrated ? value : fallback, set];
+}
+
+export type DashboardTab = "world" | "groups";
+
+/** Active dashboard tab: "Monde entier" (Leiden) or "Groupes de comparaison" (OpenAlex). */
+export function useDashboardTab(): [DashboardTab, (tab: DashboardTab) => void] {
+  return usePersistedString<DashboardTab>("crisalid.dashboardTab", "groups", ["world", "groups"]);
+}
+
+/** OpenAlex domain of the "Groupes de comparaison" tab ("all" or a domain id). */
+export function useCurrentOpenAlexDomain(): [string, (domain: string) => void] {
+  return usePersistedString("crisalid.currentOpenAlexDomain", "all", ["all", "1", "2", "3", "4"]);
+}

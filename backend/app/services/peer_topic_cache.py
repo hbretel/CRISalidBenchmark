@@ -3,12 +3,11 @@
 Strategy (§4.4):
   Rather than ingesting all publications for every peer (prohibitively expensive),
   we call the OpenAlex group_by API which returns publication counts per topic for a
-  given institution in a single paginated response. This is cheap (~few API calls per
-  institution) and sufficient for volume-based disciplinary specificity comparison.
-
-  Note: this gives volume only (no citation data). Citation-weighted impact at the
-  fine topic level for peers would require full publication ingestion for each peer —
-  explicitly deferred to v2 (§4.5 option b).
+  given institution in a single paginated response — one call per statistic (all
+  works, top 10 % cited, open access, international collaboration), see
+  services/topics_signature.py. Per-publication data for peers (e.g. raw citation
+  counts) would require full publication ingestion for each peer — explicitly
+  deferred to v2 (§4.5 option b).
 
   The lineage filter is applied for peers too, for consistency with the configured
   institution's ingestion scope.
@@ -21,11 +20,9 @@ Cache refresh policy [Défaut — modifiable]:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
@@ -34,6 +31,7 @@ from app.models.peers import PeerGroup, PeerGroupMember, PeerTopicCount
 from app.services.openalex_client import OpenAlexClient
 from app.services.institution_resolver import resolve_ror
 from app.services.quality.comparable import current_window, ensure_counts
+from app.services.topics_signature import ensure_topic_stats
 from app.services.ror import normalize_ror
 
 logger = logging.getLogger(__name__)
@@ -90,22 +88,30 @@ async def _do_fill(
     config: InstanceConfig,
     progress: CacheFillProgress,
 ) -> None:
-    # Same pass also fills the quality-axis counts (services/quality/comparable.py)
-    # for every member and for the reference institution itself.
+    # Same pass fills, for every member and for the reference institution
+    # itself, the per-topic statistics (topics signature,
+    # services/topics_signature.py) and the quality-axis counts
+    # (services/quality/comparable.py), both over the current Leiden window.
     async with AsyncSessionLocal() as session:
         years = await current_window(session)
+    if not years:
+        logger.warning("Peer cache fill skipped: no Leiden window (import Leiden data first)")
+        progress.running = False
+        return
     async with OpenAlexClient(config.openalex_api_key, config.contact_email) as client:
         own_ror = normalize_ror(config.ror_id)
-        if years:
-            await ensure_counts(client, config.openalex_institution_id, own_ror, years)
+        try:
+            await ensure_topic_stats(client, config.openalex_institution_id, own_ror, years)
+        except Exception as exc:
+            logger.warning("Failed to fetch topic statistics of the reference institution: %s", exc)
+        await ensure_counts(client, config.openalex_institution_id, own_ror, years)
         for member in members:
             try:
-                await _fill_one_institution(member.ror_id, client)
-                if years:
-                    async with AsyncSessionLocal() as session:
-                        openalex_id = await resolve_ror(member.ror_id, session, client)
-                    if openalex_id:
-                        await ensure_counts(client, openalex_id, member.ror_id, years)
+                async with AsyncSessionLocal() as session:
+                    openalex_id = await resolve_ror(member.ror_id, session, client)
+                if openalex_id:
+                    await ensure_topic_stats(client, openalex_id, member.ror_id, years)
+                    await ensure_counts(client, openalex_id, member.ror_id, years)
                 progress.done += 1
             except Exception as exc:
                 logger.warning(
@@ -120,55 +126,6 @@ async def _do_fill(
         progress.total,
         progress.failed,
     )
-
-
-async def _fill_one_institution(ror_id: str, client: OpenAlexClient) -> None:
-    async with AsyncSessionLocal() as session:
-        # Resolve ROR → OpenAlex ID
-        openalex_id = await resolve_ror(ror_id, session, client)
-        if not openalex_id:
-            return
-
-        # Check if already fresh (skip if fetched recently — TTL check)
-        result = await session.execute(
-            select(PeerTopicCount).where(
-                PeerTopicCount.openalex_institution_id == openalex_id
-            ).limit(1)
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            # Already cached — skip for now (TTL refresh happens on Leiden import)
-            return
-
-    # Fetch topic counts from OpenAlex
-    groups = await client.get_topic_counts_for_institution(openalex_id)
-
-    if not groups:
-        return
-
-    rows = [
-        {
-            "openalex_institution_id": openalex_id,
-            "ror_id": ror_id,
-            "topic_id": g["key"],
-            "works_count": g.get("count", 0),
-            "fetched_at": datetime.now(timezone.utc),
-        }
-        for g in groups
-        if g.get("key")
-    ]
-
-    if not rows:
-        return
-
-    async with AsyncSessionLocal() as session:
-        stmt = pg_insert(PeerTopicCount).values(rows)
-        stmt = stmt.on_conflict_do_update(
-            constraint="uq_peer_topic_counts_key",
-            set_={"works_count": stmt.excluded.works_count, "fetched_at": stmt.excluded.fetched_at},
-        )
-        await session.execute(stmt)
-        await session.commit()
 
 
 async def invalidate_cache_for_group(peer_group_id: int, session: AsyncSession) -> None:

@@ -26,6 +26,10 @@ function compareIds(a: string, b: string): number {
   return 0;
 }
 
+// Header cells stick below the dashboard's sticky header (see DataTable).
+const STICKY: React.CSSProperties = { top: "var(--sticky-offset, 0px)" };
+const TH = "sticky z-10 bg-gray-50 shadow-[inset_0_-1px_0_#e5e7eb] py-1.5 px-2 font-medium";
+
 export function QualityCriteriaTable({ categories }: { categories: NonNullable<QualitySummary["categories"]> }) {
   return (
     <div className="bg-white border rounded-lg p-4">
@@ -43,15 +47,16 @@ export function QualityCriteriaTable({ categories }: { categories: NonNullable<Q
                 {cat.name}
                 <span className="text-xs font-normal text-gray-400">{t("quality.criteriaCount", { n: count })}</span>
               </summary>
-              <div className="overflow-x-auto">
+              {/* No overflow container on large screens: it would stop the header from sticking. */}
+              <div className="max-lg:overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-y bg-gray-50 text-xs text-gray-500">
-                      <th className="py-1.5 px-2 text-left font-medium">{t("quality.colCriterion")}</th>
-                      <th className="py-1.5 px-2 text-left font-medium">{t("quality.colRole")}</th>
-                      <th className="py-1.5 px-2 text-right font-medium">{t("quality.colShareYes")}</th>
-                      <th className="py-1.5 px-2 text-right font-medium">{t("quality.colCoverage")}</th>
-                      <th className="py-1.5 px-2 text-right font-medium whitespace-nowrap">{t("quality.colCounts")}</th>
+                    <tr className="text-xs text-gray-500">
+                      <th style={STICKY} className={`${TH} text-left`}>{t("quality.colCriterion")}</th>
+                      <th style={STICKY} className={`${TH} text-left`}>{t("quality.colRole")}</th>
+                      <th style={STICKY} className={`${TH} text-right`}>{t("quality.colShareYes")}</th>
+                      <th style={STICKY} className={`${TH} text-right`}>{t("quality.colCoverage")}</th>
+                      <th style={STICKY} className={`${TH} text-right whitespace-nowrap`}>{t("quality.colCounts")}</th>
                     </tr>
                   </thead>
                   {cat.subcategories.map((sub) => (

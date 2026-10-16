@@ -209,14 +209,25 @@ export function WeightProfileModal({ open, onClose, editingProfile, existingProf
               className="w-full accent-brand-600 disabled:opacity-40"
             />
 
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => ({ ...v, [axis]: !v[axis] }))}
-              className="mt-3 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-            >
-              {expanded[axis] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              {t("weightProfileModal.advancedIndicators")}
-            </button>
+            {axis === "qualite" && (
+              <p className="mt-3 text-xs text-gray-500">{t("weightProfileModal.qualityWeightsNote")}</p>
+            )}
+            {Object.keys(weights.sub[axis] ?? {}).length === 1 && (
+              <p className="mt-3 text-xs text-gray-500">
+                {t(`indicator.${Object.keys(weights.sub[axis])[0]}`)} :{" "}
+                {t(`indicatorDescription.${Object.keys(weights.sub[axis])[0]}`)}
+              </p>
+            )}
+            {Object.keys(weights.sub[axis] ?? {}).length > 1 && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => ({ ...v, [axis]: !v[axis] }))}
+                className="mt-3 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+              >
+                {expanded[axis] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                {t("weightProfileModal.advancedIndicators")}
+              </button>
+            )}
 
             {expanded[axis] && (
               <div className="mt-3 pl-2 border-l-2 border-gray-100 space-y-3">

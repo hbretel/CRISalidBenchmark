@@ -14,7 +14,7 @@ interface Props {
  * Shown as a filled bar with the institution marker at the percentile position.
  */
 export function PercentileGauge({ percentile, label, size = "md" }: Props) {
-  if (percentile === null) {
+  if (percentile === null || percentile === undefined) {
     return (
       <span className="text-xs text-gray-400 italic">
         {t("percentileGauge.notComputable")}

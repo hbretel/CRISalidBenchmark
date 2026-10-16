@@ -53,9 +53,15 @@ export const fr = {
       "plus un simple élargissement du même chiffre.",
     domainLabel: "Grand domaine Leiden",
     domainTooltip:
-      "Filtre global : le Leiden Ranking publie ses indicateurs sur 5 grands domaines (+ 'Tous les " +
-      "domaines'). S'applique aux sections Synthèse et Impact en citations. La section Domaines de " +
-      "spécialité utilise sa propre taxonomie OpenAlex, indépendante de ce filtre.",
+      "Le Leiden Ranking publie ses indicateurs sur 5 grands domaines (+ 'Tous les domaines'), avec sa propre " +
+      "classification des publications. Utilisé uniquement dans l'onglet Monde entier.",
+    tab_world: "Monde entier",
+    tab_groups: "Groupes de comparaison",
+    openalexDomainLabel: "Domaine OpenAlex",
+    openalexDomainTooltip:
+      "Les 4 domaines de la taxonomie Topics d'OpenAlex (niveau le plus large), équivalent des grands domaines " +
+      "Leiden dans l'onglet Groupes de comparaison, sans correspondance entre les deux classifications. Le " +
+      "domaine d'une publication est celui de son topic principal (une publication = un domaine).",
     profileLabel: "Profil de comparaison",
     groupLabel: "Groupe de comparaison",
     decileTooltip: "Décile Leiden (nombre de publications) d'appartenance",
@@ -74,94 +80,161 @@ export const fr = {
   filters: {
     core: "Publications core",
     allPublications: "Toutes publications",
-    sectionFiltersNote:
-      "Filtres appliqués à cette section — modifiables depuis l'en-tête (publications core / grand domaine) ci-dessus.",
-    fullCorpus: "Corpus complet (non-core)",
-    allDomainsOpenAlex: "Tous domaines (taxonomie OpenAlex)",
-    specialtyIndependentNote:
-      "Cette section n'est pas affectée par les filtres « publications core » et « grand domaine Leiden » " +
-      "de l'en-tête : le calcul de spécificité disciplinaire porte toujours sur le corpus complet, et " +
-      "utilise la taxonomie Topics OpenAlex (Domain > Field > Subfield > Topic), distincte des 5 grands " +
-      "domaines Leiden.",
   },
 
-  synthesis: {
-    title: "Synthèse",
-    publications: "Nombre de publications",
-    publicationsTooltipCore:
-      "Publications « core » : approximation de la définition Leiden (source CWTS Core, type article/revue/chapitre, anglais, non rétracté).",
-    publicationsTooltipAll: "Ensemble des publications synchronisées depuis OpenAlex, sans filtre core.",
-    citations: "Somme des citations",
-    citationsTooltipCore: "Somme des citations reçues par les publications core.",
-    citationsTooltipAll: "Somme des citations reçues par l'ensemble des publications.",
-    publicationsTooltipCoreLeiden: "Publications « core » au sens du Leiden Ranking.",
-    publicationsTooltipAllLeiden: "Ensemble des publications de l'établissement comptées par le Leiden Ranking.",
-    leidenDomainSourceNote:
-      "Grand domaine Leiden sélectionné : valeurs P et TCS du Leiden Ranking pour votre établissement " +
-      "(les publications OpenAlex ne portent pas de grand domaine Leiden). Le nombre de publications par " +
-      "domaine est fractionnaire (une publication interdisciplinaire est répartie entre domaines), arrondi " +
-      "à l'affichage. « — » si l'établissement n'est pas classé par Leiden.",
-    headlinePpTop10: "% dans le top 10% le plus cité",
-    headlinePp10Cits: "% avec au moins 10 citations",
-    headlineTooltip:
-      "Indicateur d'impact par défaut du Leiden Ranking : en mode publications core, la part de " +
-      "publications dans le top 10% le plus cité (normalisée par domaine) ; en mode toutes les " +
-      "publications, la part de publications ayant reçu au moins 10 citations (seuil absolu, non " +
-      "normalisé — ce n'est pas le même indicateur).",
+  world: {
+    methodLabel: "Source :",
+    method:
+      "Leiden Ranking Open Edition (CWTS), indicateurs tels que publiés — calculés par CWTS à partir d'OpenAlex, " +
+      "normalisés par domaine fin et par année, en comptage complet ; ils ne sont pas recalculés ici. Comme dans le " +
+      "Leiden Ranking, aucun score global n'est calculé. Rangs et percentiles de votre établissement calculés parmi " +
+      "les universités ayant au moins {min} publications (P) dans le domaine sélectionné (seuil réglable dans " +
+      "Configuration).",
+    coreNote:
+      "Publications core : indicateurs normalisés par domaine (top 1 / 10 / 50 %, MNCS), disponibles uniquement " +
+      "sur ce sous-ensemble dans le Leiden Ranking.",
+    allPublicationsNote:
+      "Toutes publications : le Leiden Ranking ne fournit alors que des indicateurs à seuil absolu (≥ 10 / ≥ 50 " +
+      "citations, MCS), non normalisés par domaine.",
+    edition: "Édition {year}",
+    loadError: "Erreur lors du chargement des données Leiden.",
+    noData: "Aucune donnée Leiden importée (page Paramètres du benchmark).",
+    ownTitle: "Votre établissement dans le Leiden Ranking",
+    ownNotRanked: "Votre établissement n'est pas classé par le Leiden Ranking dans ce domaine.",
+    ownBelowThreshold:
+      "Moins de {min} publications dans ce domaine : valeurs affichées sans rang ni percentile.",
+    rank: "{rank}e sur {n}",
+    tableTitle: "Classement Leiden",
+    colUniversity: "Université",
+    colCountry: "Pays",
+    belowThreshold: "(P < seuil)",
+    countryFilter: "Pays",
+    allCountries: "Tous les pays",
+    myCountry: "Mon pays ({country})",
   },
 
-  impact: {
-    title: "Impact en citations",
-    methodologyNote:
-      "les indicateurs Leiden (pp_top_10/pp_10_cits, pp_int_collab, pp_oa) proviennent directement du " +
-      "Leiden Ranking Open Edition (comptage complet uniquement, édition {year}), normalisés par domaine " +
-      "par CWTS. Les indicateurs OpenAlex (citations, h-index) sont recalculés nocturnement et non normalisés.",
-    methodologyNoteLabel: "Note méthodologique :",
-    toggleNonEquivalenceNote:
-      " En mode « toutes les publications », l'indicateur vedette change de nature : il mesure la part " +
-      "de publications ayant reçu au moins 10 citations, sans normalisation par discipline — ce n'est " +
-      "pas la même chose que pp_top_10 (mode « publications core »).",
-    computeError: "Erreur lors du calcul des indicateurs.",
-    percentileNote: "Percentiles calculés parmi {count} établissements pairs (univers Leiden Ranking).",
-    headlinePpTop10: "% top 10% cités (pp_top_10)",
-    headlinePp10Cits: "% avec ≥ 10 citations (pp_10_cits)",
-    hIndexWithPeriod: "Indice h (publications core, {start}–{end})",
-    hIndex: "Indice h (publications core)",
-    mncs: "MNCS (citations normalisées, mode core uniquement)",
-    citationsAvg: "Citations moyennes par publication",
-    oaPct: "% accès ouvert",
-    collabPct: "% collaboration internationale",
+  worldIndicator: {
+    p: "P",
+    pp_top_1: "PP(top 1 %)",
+    pp_top_10: "PP(top 10 %)",
+    pp_top_50: "PP(top 50 %)",
+    mncs: "MNCS",
+    mcs: "MCS",
+    pp_10_cits: "PP(≥ 10 cit.)",
+    pp_50_cits: "PP(≥ 50 cit.)",
+    pp_oa: "PP(accès ouvert)",
+    pp_int_collab: "PP(collab. intl.)",
   },
 
-  specialty: {
-    title: "Domaines de spécialité",
-    subtitle: "Profil thématique de l'établissement (corpus complet, pas de filtre core).",
-    fullCorpusNote:
-      "cet axe utilise le corpus complet (sans filtre core), car la définition core Leiden favorise les " +
-      "revues anglophones et exclurait une partie du profil SHS ou recherche appliquée. La comparaison " +
-      "aux pairs est basée sur le volume de publications par topic (pas l'impact).",
-    fullCorpusNoteLabel: "Note :",
-    computeError: "Erreur lors du calcul.",
-    herfindahlTitle: "Indice de Herfindahl (spécialisation disciplinaire)",
-    herfindahlFooter:
-      "Calculé au niveau field (2e niveau de la hiérarchie OpenAlex). H ∈ [0, 1] — H proche de 0 : diffus ; H proche de 1 : très concentré.",
-    treemapTitle: "Carte thématique (Topics OpenAlex)",
-    treemapTooltip:
-      "Répartition des publications selon la taxonomie Topics d'OpenAlex (Domain > Field > Subfield > " +
-      "Topic). La surface est proportionnelle au nombre de publications. Cliquez sur une case pour " +
-      "explorer le niveau suivant.",
-    signatureTitle: "Topics signature",
-    signatureCacheNotPopulatedBefore: "Le cache de distribution par topic des pairs n'est pas encore peuplé. Rendez-vous sur",
-    signatureCacheNotPopulatedAfter: " pour déclencher le calcul.",
-    signatureNoneAboveThreshold: "Aucun topic ne dépasse le seuil (×{threshold}) par rapport aux pairs.",
+  worldIndicatorDescription: {
+    p: "Nombre de publications (comptage complet).",
+    pp_top_1: "Part des publications parmi les 1 % les plus citées de leur domaine et de leur année.",
+    pp_top_10: "Part des publications parmi les 10 % les plus citées de leur domaine et de leur année.",
+    pp_top_50: "Part des publications parmi les 50 % les plus citées de leur domaine et de leur année.",
+    mncs: "Nombre moyen de citations normalisé par domaine et année (1 = moyenne mondiale).",
+    mcs: "Nombre moyen de citations par publication, non normalisé.",
+    pp_10_cits: "Part des publications citées au moins 10 fois (seuil absolu, non normalisé).",
+    pp_50_cits: "Part des publications citées au moins 50 fois (seuil absolu, non normalisé).",
+    pp_oa: "Part des publications en accès ouvert.",
+    pp_int_collab: "Part des publications co-signées avec au moins un autre pays.",
   },
 
-  topicsSignatureTable: {
-    colName: "Nom du Topic",
-    colOwnCount: "Nb. publications établissement",
-    colOwnShare: "Part établissement (‰)",
-    colPeerShare: "Moyenne groupe de comparaison (‰)",
-    colRatio: "Taux de spécialisation",
+  groupTab: {
+    methodLabel: "Source :",
+    method:
+      "OpenAlex uniquement, sans dépendance au Leiden Ranking : pour chaque établissement du groupe (le vôtre " +
+      "inclus), nombre de publications de la période Leiden courante vérifiant chaque critère, compté par OpenAlex " +
+      "(une requête groupée par domaine OpenAlex et par critère). Tous les indicateurs sont des parts de " +
+      "publications, les seuls indicateurs Leiden reproductibles à partir de comptages (pas de MNCS ni de " +
+      "moyenne de citations). Les établissements sous le seuil de publications sont affichés sans percentile, " +
+      "rang ni score.",
+    threshold: "Seuil : {min} publications",
+    loadError: "Erreur lors du calcul du benchmark du groupe.",
+    cacheMissingBefore:
+      "Comptages OpenAlex disponibles pour {n} établissement(s) sur {total}. Lancez « Calculer les topics et la " +
+      "qualité des pairs » depuis la page",
+    cacheMissingAfter: " pour compléter la comparaison.",
+  },
+
+  groupOverview: {
+    title: "Votre établissement dans le groupe",
+    belowThreshold:
+      "Moins de {min} publications sur ce périmètre : valeurs affichées sans percentile, rang ni score global.",
+    period: "Publications {start}–{end} (OpenAlex)",
+    score: "Score global",
+    rank: "{rank}e sur {n} établissements comparés",
+  },
+
+  openalexDomain: {
+    all: "Tous les domaines",
+    "1": "Sciences de la vie",
+    "2": "Sciences sociales",
+    "3": "Sciences physiques",
+    "4": "Sciences de la santé",
+  },
+
+  specialization: {
+    title: "Taux de spécialisation",
+    subtitle: "Part des publications de l'établissement dans le domaine OpenAlex sélectionné dans l'en-tête.",
+    methodLabel: "Mode de calcul :",
+    method:
+      "taux de spécialisation = publications du domaine ÷ publications classées dans l'un des 4 domaines OpenAlex " +
+      "(domaine du topic principal ; les publications sans topic sont exclues du dénominateur), sur la période " +
+      "Leiden courante. Les taux d'un établissement sur les 4 domaines totalisent 100 %. Percentile parmi les " +
+      "établissements du groupe au-dessus du seuil de publications. C'est l'unique indicateur de l'axe " +
+      "Spécialisation du score global ; il n'est pas calculé en mode « Tous les domaines ».",
+    cardTitle: "Taux de spécialisation — {domain}",
+    notApplicable:
+      "Le taux de spécialisation se calcule par rapport à un domaine : choisissez un domaine OpenAlex dans " +
+      "l'en-tête. En mode « Tous les domaines », l'axe Spécialisation est exclu du score global et les autres axes " +
+      "sont renormalisés.",
+    noData: "Comptages OpenAlex non disponibles pour votre établissement.",
+    counts: "{field} publications dans ce domaine (P).",
+    groupStats: "Groupe ({n} établissements comparés) : médiane {median} %, maximum {max} %.",
+  },
+
+  signature: {
+    title: "Topics signature",
+    subtitle:
+      "Topics OpenAlex dans lesquels votre établissement est premier du groupe de comparaison en score global.",
+    methodLabel: "Mode de calcul :",
+    method:
+      "pour chaque topic OpenAlex (niveau le plus fin, ~4 500 topics) où votre établissement compte au moins {min} " +
+      "publications sur {start}–{end}, un score global par topic est calculé pour chaque établissement du groupe " +
+      "ayant lui aussi au moins {min} publications dans ce topic, avec les poids du profil de comparaison : axe " +
+      "Impact (percentiles de la part des publications dans le top 10 % des plus citées — normalisée par domaine et " +
+      "année par OpenAlex —, de la part en accès ouvert et de la part en collaboration internationale) et axe " +
+      "Spécialisation (percentile de la part du topic dans la production de l'établissement). L'axe Qualité n'est " +
+      "pas disponible à l'échelle des topics : son poids est redistribué sur les deux autres (seuil de publications " +
+      "réglable dans Configuration). Un topic est signature " +
+      "si votre établissement y obtient le meilleur score (ex æquo inclus). Les topics signature ne sont pas " +
+      "utilisés dans le calcul du score global.",
+    computeError: "Erreur lors du calcul des topics signature.",
+    cacheMissingBefore:
+      "Les statistiques par topic ne sont pas encore calculées pour votre établissement et les membres du groupe. " +
+      "Lancez « Calculer les " +
+      "topics et la qualité des pairs » depuis la page",
+    cacheMissingAfter: ".",
+    coverage: "{n} établissement(s) sur {total} avec statistiques par topic.",
+    none: "Votre établissement n'est premier du groupe dans aucun topic (seuil : {min} publications par topic).",
+    alone: "seul du groupe",
+    colTopic: "Topic",
+    colPublications: "Publications",
+    colShare: "Part de la production (‰)",
+    colTop10: "Top 10 % cités",
+    colOa: "Accès ouvert",
+    colIntl: "Collab. intl.",
+    colScore: "Score (vous)",
+    colRunnerUp: "2e du groupe",
+    colMargin: "Écart",
+    colCompared: "Étab. comparés",
+  },
+
+  dataTable: {
+    rows: "Lignes {from}–{to} sur {total}",
+    goToOwn: "Aller à mon établissement",
+    previous: "Page précédente",
+    next: "Page suivante",
   },
 
   treemap: {
@@ -176,42 +249,71 @@ export const fr = {
     analysedFooter: "{count} publications analysées (corpus complet)",
   },
 
-  subIndicatorCard: {
-    percentileLabel: "Au sein du groupe de comparaison",
-    sourceLabel: "Source : {source}",
-    sourceLeiden: "Leiden Ranking",
-    sourceOpenalex: "OpenAlex (nocturne)",
-    sourceBoth: "OpenAlex + Leiden",
-  },
-
   percentileGauge: {
-    notComputable: "Percentile non calculable (données OpenAlex uniquement pour cet établissement)",
+    notComputable: "Non classé (sous le seuil de publications ou donnée indisponible)",
     nth: "{percentile}e percentile",
+    groupLabel: "Au sein du groupe de comparaison",
   },
 
   comparisonTable: {
     title: "Tableau comparatif des établissements",
-    computeError: "Erreur lors du calcul du tableau comparatif.",
+    colRank: "Rang",
     colInstitution: "Établissement",
-    colPublications: "Nb. publications",
-    colHeadline: "Indicateur vedette (%)",
-    colOa: "% accès ouvert",
-    colCollab: "% collab. intl.",
-    colSpecificity: "Spécificité (simplifiée)",
-    colScore: "Score global",
+    colSpecialization: "Taux de spécialisation",
     colQuality: "Qualité (coef. estimé)",
-    tooltipQuality:
-      " Qualité : coefficient de la grille d'évaluation estimé à partir des critères comptables dans OpenAlex " +
-      "pour chaque établissement (identique pour tous), pondéré par les Paramètres d'évaluation qualitative. " +
-      "« — » tant que le cache des pairs n'est pas calculé (Paramètres du benchmark) ; l'axe Qualité est alors " +
-      "exclu du score global de l'établissement concerné et les autres axes sont renormalisés.",
+    colQualityTop10: "PP(top 10 %) qualité",
+    colScore: "Score global",
     ownTag: "(vous)",
-    tooltipHeadlinePpTop10: "% dans le top 10% le plus cité (pp_top_10)",
-    tooltipHeadlinePp10Cits: "% avec au moins 10 citations (pp_10_cits)",
-    tooltipEdition: " Indicateur vedette : {headline}, édition Leiden {year}.",
-    tooltipDomain:
-      " Grand domaine sélectionné : nombre de publications, indicateur vedette, % accès ouvert et % collab. " +
-      "intl. portent sur ce domaine ; la spécificité simplifiée reste calculée sur l'ensemble de l'établissement.",
+    noData: "comptages OpenAlex non calculés",
+    belowThreshold: "sous le seuil de publications : non classé",
+    scoreButtonLabel: "Voir le calcul du score global de {name}",
+    explainTitle: "Lire ce tableau",
+    explainImpactLabel: "Impact —",
+    explainImpact:
+      "parts de publications {start}–{end} (domaine : {domain}) calculées à partir d'OpenAlex : PP(top 10 %) et " +
+      "PP(top 1 %) = parmi les 10 % / 1 % les plus citées de leur domaine et année (percentile de citations " +
+      "normalisé d'OpenAlex), accès ouvert, collaboration internationale. Les autres indicateurs d'impact (FWCI ≥ 1, " +
+      "≥ 10 citations, citées, collaboration industrielle) figurent au-dessus et dans le détail de chaque score.",
+    explainSpecializationLabel: "Taux de spécialisation —",
+    explainSpecialization: "part des publications de l'établissement dans le domaine « {domain} ».",
+    explainSpecializationNA:
+      "non calculé en mode « Tous les domaines » (choisissez un domaine dans l'en-tête) : l'axe Spécialisation est " +
+      "alors exclu du score global.",
+    explainQualityLabel: "Qualité —",
+    explainQuality:
+      "coefficient de la grille d'évaluation qualitative estimé à partir des critères comptables dans OpenAlex, hors " +
+      "critères d'impact (×1 = neutre ; au-dessus de 1, les facteurs de qualité vérifiés l'emportent), et part des " +
+      "publications parmi les 10 % de meilleure qualité des publications du groupe.",
+    explainScoreLabel: "Score global (0–100) —",
+    explainScore:
+      "chaque indicateur est converti en percentile parmi les établissements ayant au moins {min} publications, les " +
+      "percentiles sont moyennés par axe, puis les axes pondérés selon le profil « {profile} » : Impact {impact} %, " +
+      "Spécialisation {spec} %, Qualité {quality} %. Un axe sans donnée est exclu et les autres renormalisés. " +
+      "Cliquez sur un score pour voir son calcul détaillé.",
+  },
+
+  scoreBreakdown: {
+    title: "Calcul du score global — {name}",
+    intro:
+      "Chaque indicateur est converti en percentile au sein du groupe de comparaison (0 = plus faible, 100 = plus " +
+      "élevé). Score d'axe = moyenne des percentiles pondérée par les poids des indicateurs ; score global = moyenne " +
+      "des scores d'axe pondérée par les poids des axes. Les indicateurs ou axes sans donnée sont exclus et leurs " +
+      "poids redistribués (colonne « poids appliqué »).",
+    profile: "Profil de comparaison : « {profile} ».",
+    axisLine: "score {score} × poids {applied} (profil : {weight}) = {contribution} points",
+    zeroWeight: "score {score}, poids nul dans le profil : non compté",
+    notApplicable: "Non applicable (mode « Tous les domaines ») : axe exclu, poids redistribué",
+    noData: "Aucune donnée : axe exclu, poids redistribué",
+    colIndicator: "Indicateur",
+    colValue: "Valeur",
+    colPercentile: "Percentile",
+    colWeight: "Poids",
+    colApplied: "Poids appliqué",
+    qualityWeightsNote:
+      "Poids des catégories de qualité : réglés pour toute l'instance dans Paramètres d'évaluation qualitative.",
+    total: "Score global =",
+    footer:
+      "Percentiles calculés parmi les établissements du groupe ayant au moins le seuil de publications (Configuration).",
   },
 
   parametresBenchmark: {
@@ -222,8 +324,9 @@ export const fr = {
       "des profils de comparaison en attribuant des poids aux indicateurs disponibles.",
     currentProfile: "Profil actuel : ",
     currentProfileTooltip:
-      "Le profil de comparaison actuel pondère les indicateurs de l'axe impact en citations et de " +
-      "l'axe domaines de spécialité pour le score composite. Il peut aussi être changé depuis l'en-tête du tableau de bord.",
+      "Le profil de comparaison actuel pondère les axes du score global (impact en citations, taux de " +
+      "spécialisation, qualité des publications) et les indicateurs de l'axe impact. Il peut aussi être changé " +
+      "depuis l'en-tête du tableau de bord.",
     defaultBadge: "par défaut",
     deleteProfileConfirm: "Supprimer ce profil de comparaison ?",
     deleteProfileError: "Erreur lors de la suppression.",
@@ -258,6 +361,9 @@ export const fr = {
     saveError: "Erreur lors de l'enregistrement.",
     saveButton: "Sauvegarder le profil",
     defaultProfileName: "Profil de comparaison {n}",
+    qualityWeightsNote:
+      "La pondération entre facteurs ex-ante, intrinsèques et ex-post se règle dans Paramètres d'évaluation " +
+      "qualitative (commune à toute l'instance).",
   },
 
   peerGroupModal: {
@@ -300,10 +406,12 @@ export const fr = {
     computing: "Calcul en cours…",
     trigger: "Calculer les topics et la qualité des pairs",
     tooltip:
-      "Peuple, pour les membres de ce groupe de pairs, le cache de distribution par topic OpenAlex (section " +
-      "« Topics signature ») et les comptages des critères de qualité comparables (axe Qualité du score " +
-      "composite, environ 30 requêtes OpenAlex par établissement). Peut prendre plusieurs minutes pour un " +
-      "grand groupe ; les comptages qualité sont rafraîchis tous les 90 jours.",
+      "Calcule, pour votre établissement et les membres de ce groupe, les statistiques par topic OpenAlex " +
+      "(section « Topics signature » : 4 requêtes group_by paginées par établissement) et les comptages par " +
+      "domaine OpenAlex de l'onglet Groupes de comparaison (impact et qualité : environ 30 requêtes par " +
+      "établissement), sur " +
+      "la période Leiden courante. Peut prendre plusieurs minutes pour un grand groupe ; les comptages qualité " +
+      "sont rafraîchis tous les 90 jours, les statistiques par topic à chaque nouvelle période Leiden.",
     complete: "Terminé ({done}/{total})",
     inProgress: "{done}/{total}",
     error: "Erreur lors du calcul.",
@@ -396,8 +504,26 @@ export const fr = {
     intro:
       "Poids et seuils de la grille d'évaluation qualitative, communs à toute l'instance. Ils déterminent le " +
       "coefficient de chaque publication (section « Qualité des publications ») et l'axe Qualité du score " +
-      "composite des profils de comparaison. Enregistrer relance l'évaluation de toutes les publications à " +
-      "partir des données en cache (aucun appel aux API, une dizaine de minutes).",
+      "global. Enregistrer relance l'évaluation de toutes les publications à partir des données en cache (aucun " +
+      "appel aux API, une dizaine de minutes).",
+    gridTitle: "Poids et seuils des critères de la grille",
+    categoryWeightsTitle: "Pondération des catégories de facteurs (axe Qualité, onglet Groupes de comparaison)",
+    categoryWeightsIntro:
+      "Poids relatifs des facteurs extrinsèques ex-ante, intrinsèques et extrinsèques ex-post, communs à toute " +
+      "l'instance. Ils déterminent le score de l'axe Qualité (moyenne pondérée des percentiles des trois " +
+      "catégories) et le coefficient estimé global de chaque établissement, ainsi que ses parts dans le top " +
+      "50 / 25 / 10 % en qualité (des poids égaux redonnent le produit des trois coefficients de la grille). " +
+      "Appliqués immédiatement, sans réévaluation des publications. Le coefficient publication par publication de " +
+      "la section « Qualité des publications » n'est pas affecté.",
+    category_qualite_ex_ante: "Facteurs extrinsèques ex-ante",
+    category_qualite_intrinseque: "Facteurs intrinsèques",
+    category_qualite_ex_post: "Facteurs extrinsèques ex-post",
+    categoryWeightsTotal: "Total : {total} %",
+    categoryWeightsNormalize: "Enregistrer (ramené à 100 %)",
+    categoryWeightsNormalizeHint: "Les poids seront proportionnellement ramenés à un total de 100 %.",
+    categoryWeightsEqual: "Poids égaux",
+    categoryInactive: "aucun critère valide hors impact : poids 0",
+    categoryWeightsSaved: "Pondération enregistrée : appliquée au tableau de bord.",
     roleHelp:
       "Coefficient : multiplie le coefficient de la publication quand le critère est vérifié (1 = neutre, " +
       "> 1 = bonus, < 1 = pénalité, 0 = exclusion). Points : s'ajoutent au score de base. Modulateur : ajuste " +
@@ -423,9 +549,14 @@ export const fr = {
     badgeAutomated: "auto",
     badgeAutomatedTooltip: "Critère tranché automatiquement pour au moins une publication lors du dernier calcul.",
     badgeComparable: "pairs",
+    badgeImpact: "impact",
+    badgeImpactTooltip:
+      "Critère compté dans OpenAlex pour chaque établissement des groupes de comparaison et présenté comme " +
+      "indicateur d'impact (citations, accès ouvert, collaborations) : il n'entre pas dans l'axe Qualité, pour ne " +
+      "pas être compté deux fois. Son poids reste utilisé pour le coefficient publication par publication.",
     badgeComparableTooltip:
-      "Critère également compté dans OpenAlex pour chaque établissement du groupe : il entre dans l'axe Qualité " +
-      "du score composite.",
+      "Critère également compté dans OpenAlex pour chaque établissement des groupes de comparaison : il entre " +
+      "dans l'axe Qualité du score global.",
     roleCoefficient: "×",
     rolePoints: "+ pts",
     roleModulator: "modul. de {target}",
@@ -438,16 +569,41 @@ export const fr = {
   qualityBenchmark: {
     title: "Positionnement dans le groupe de comparaison",
     tooltip:
-      "Coefficient de la grille estimé à partir des {n} critères comptables dans OpenAlex, calculé de la même " +
-      "façon pour chaque établissement du groupe (y compris le vôtre), pondéré par les Paramètres d'évaluation " +
-      "qualitative. C'est l'axe Qualité du score composite. Il diffère du coefficient médian ci-dessus, calculé " +
-      "publication par publication sur environ 190 critères.",
+      "Calculé de la même façon pour chaque établissement du groupe (y compris le vôtre) à partir des comptages " +
+      "OpenAlex : c'est l'axe Qualité du score global. Il diffère du coefficient médian ci-dessus, calculé " +
+      "publication par publication sur l'ensemble des critères automatisés.",
+    methodLabel: "Mode de calcul :",
+    method:
+      "pour chaque établissement du groupe ayant au moins {min} publications {start}–{end} sur le périmètre choisi, " +
+      "part de ses publications vérifiant chacun des critères de la grille comptables dans OpenAlex (hors critères " +
+      "d'impact, présentés comme indicateurs d'impact). En supposant les critères indépendants, on en déduit la " +
+      "distribution du coefficient de qualité de ses publications : le coefficient estimé en est la moyenne " +
+      "géométrique, et — comme le Leiden Ranking pour les citations — P est le nombre de publications, P(top x %) " +
+      "et PP(top x %) le nombre et la part de publications parmi les x % de meilleure qualité de l'ensemble des " +
+      "publications du groupe (ex æquo au seuil comptés au prorata). Sur l'ensemble du groupe, PP(top 10 %) vaut " +
+      "donc exactement 10 %.",
+    weightsNote:
+      "Pondération des catégories (Paramètres d'évaluation qualitative) : ex-ante {exAnte} %, intrinsèques " +
+      "{intrinsic} %, ex-post {exPost} %.",
+    inactiveNote:
+      "Sans critère non neutre dans la grille actuelle : {categories} — catégorie exclue du score de l'axe, son " +
+      "poids redistribué.",
+    inactive: "Aucun critère non neutre : exclu du score",
     unavailable:
-      "Comparaison indisponible : le cache qualité des pairs n'est pas encore calculé. Lancez « Calculer les " +
-      "topics et la qualité des pairs » depuis la page Paramètres du benchmark.",
+      "Comparaison indisponible : comptages OpenAlex non calculés pour votre établissement, ou moins de {min} " +
+      "publications sur ce périmètre.",
+    leidenTitle: "Indicateurs de type Leiden",
+    topLabel: "PP(top {level} %) qualité",
+    topCount: "P(top {level} %) = {n} publications",
+    axisTitle: "Coefficients estimés par catégorie (axe Qualité du score global)",
     global: "Coefficient estimé",
-    percentile: "{p}e percentile",
-    coverage: "{n} établissement(s) sur {total} avec données",
+    axisScore: "Score de l'axe Qualité : {score} / 100",
+    tableTitle: "Établissements du groupe",
+    colP: "P",
+    colPTop: "P(top {level} %)",
+    colPPTop: "PP(top {level} %)",
+    colCoefficient: "Coef. estimé",
+    colAxisScore: "Score axe",
   },
 
   configuration: {
@@ -476,6 +632,15 @@ export const fr = {
     emailTitle: "Email de service",
     emailLabel: "Email de contact technique",
     emailUpdated: "Email mis à jour.",
+    minPublicationsTitle: "Seuil minimal de publications",
+    minPublicationsIntro:
+      "Nombre minimal de publications pour qu'un établissement soit comparé sur un périmètre (établissement " +
+      "entier, domaine, topic) : en dessous, ses valeurs sont affichées sans percentile, rang ni score — des parts " +
+      "calculées sur quelques publications ne sont pas significatives. S'applique aux deux onglets du tableau de " +
+      "bord et aux topics signature.",
+    minPublicationsLabel: "Publications minimum",
+    minPublicationsInvalid: "Entrez un nombre entier supérieur ou égal à 1.",
+    minPublicationsUpdated: "Seuil mis à jour : classements recalculés.",
     qualityTitle: "Indicateurs qualitatifs (grille d'évaluation)",
     qualityIntro:
       "Calculés automatiquement chaque nuit après la synchronisation OpenAlex. Le premier calcul sur un corpus " +
@@ -573,49 +738,46 @@ export const fr = {
 
   axis: {
     impact_scientifique: "Impact en citations",
-    specificite_disciplinaire: "Domaines de spécialité",
+    specificite_disciplinaire: "Taux de spécialisation",
     qualite: "Qualité des publications",
   },
 
   indicator: {
-    impact_normalise_leiden: "% top 10% / seuil citations (Leiden)",
-    citations_brutes_moyennes: "Citations moyennes",
-    h_index_core: "Indice h (core)",
-    oa_pct: "% accès ouvert",
-    collab_intl_pct: "% collab. internationale",
-    herfindahl: "Indice de Herfindahl",
-    nb_topics_signature: "Nb. topics signature",
+    p: "Publications (P)",
+    pp_top_1: "PP(top 1 %)",
+    pp_top_10: "PP(top 10 %)",
+    pp_fwci_1: "FWCI ≥ 1",
+    pp_10_cits: "≥ 10 citations",
+    pp_cited: "Citées au moins 1 fois",
+    pp_oa: "Accès ouvert",
+    pp_int_collab: "Collab. internationale",
+    pp_industry_collab: "Collab. industrielle",
+    taux_specialisation: "Taux de spécialisation",
     qualite_ex_ante: "Qualité — facteurs ex-ante",
     qualite_intrinseque: "Qualité — facteurs intrinsèques",
     qualite_ex_post: "Qualité — facteurs ex-post",
   },
 
   indicatorDescription: {
-    impact_normalise_leiden:
-      "Indicateur Leiden vedette, dont la source change selon le mode actif sur la page Impact scientifique : " +
-      "en mode « publications core » (par défaut) = pp_top_10, le % de publications de l'établissement dans le " +
-      "top 10% le plus cité, normalisé par domaine par CWTS. En mode « toutes les publications » = pp_10_cits, " +
-      "le % de publications ayant reçu au moins 10 citations — un seuil absolu, non normalisé par domaine. " +
-      "Ces deux variantes ne sont pas équivalentes ; le poids ci-dessus s'applique à celle actuellement affichée.",
-    citations_brutes_moyennes:
-      "Citations moyennes par publication (somme des citations ÷ nombre de publications), recalculées chaque " +
-      "nuit depuis OpenAlex sur les publications core par défaut. Non normalisé par domaine — un établissement " +
-      "en sciences biomédicales aura mécaniquement des valeurs plus hautes qu'un établissement en SHS.",
-    oa_pct:
-      "Pourcentage de publications en accès ouvert (champ is_oa d'OpenAlex), recalculé chaque nuit sur le même " +
-      "sous-ensemble (core par défaut) que les autres indicateurs OpenAlex de cet axe.",
-    collab_intl_pct:
-      "Pourcentage de publications avec au moins une affiliation d'auteur dans un pays différent de celui de " +
-      "l'établissement configuré, recalculé chaque nuit depuis les données d'affiliation OpenAlex.",
-    herfindahl:
-      "Indice de concentration disciplinaire H = Σ(part_i)² calculé au niveau 'field' (2e niveau de la " +
-      "hiérarchie Topics OpenAlex : Domain > Field > Subfield > Topic), sur l'ensemble du corpus (pas de filtre " +
-      "core). H proche de 0 = production diffuse sur de nombreux champs ; H proche de 1 = forte spécialisation. " +
-      "Basé sur le volume de publications, pas sur leur impact.",
-    nb_topics_signature:
-      "Nombre de Topics OpenAlex (niveau le plus fin, ~4500 topics) où la part de publications de l'établissement " +
-      "dépasse ×1.5 la part moyenne du groupe de comparaison sélectionné (comparaison peer-relative basée sur le volume, " +
-      "via le cache peer_topic_counts — voir la page Paramètres du benchmark si ce cache n'est pas encore peuplé).",
+    pp_top_1:
+      "Part des publications parmi les 1 % les plus citées de leur domaine et de leur année (percentile de " +
+      "citations normalisé d'OpenAlex, critère 106.1 de la grille).",
+    pp_top_10:
+      "Part des publications parmi les 10 % les plus citées de leur domaine et de leur année (percentile de " +
+      "citations normalisé d'OpenAlex, critère 106) — équivalent OpenAlex du PP(top 10 %) de Leiden.",
+    pp_fwci_1:
+      "Part des publications dont l'impact normalisé (FWCI d'OpenAlex) atteint au moins la moyenne mondiale " +
+      "(critère 107). Remplace le MNCS, non reproductible à partir de comptages.",
+    pp_10_cits: "Part des publications citées au moins 10 fois (seuil absolu, non normalisé ; critère 69).",
+    pp_cited: "Part des publications citées au moins une fois (critère 65).",
+    pp_oa: "Part des publications en accès ouvert (OpenAlex, critère 4).",
+    pp_int_collab: "Part des publications dont les auteurs sont affiliés dans au moins deux pays (critère 14.4).",
+    pp_industry_collab:
+      "Part des publications co-signées par une entreprise et un établissement académique (critère 14.3).",
+    taux_specialisation:
+      "Part des publications de l'établissement dans le domaine OpenAlex sélectionné " +
+      "dans l'en-tête — valorise les établissements spécialisés dans ce domaine. Percentile au sein du groupe de " +
+      "comparaison. Non calculé en mode « Tous les domaines » : l'axe est alors exclu du score global.",
     qualite_ex_ante:
       "Coefficient de qualité estimé sur les critères « ex-ante » de la grille d'évaluation (canal de publication, " +
       "accès ouvert, indexation, métadonnées, financement, collaborations) comptables dans OpenAlex pour chaque " +
@@ -625,8 +787,8 @@ export const fr = {
       "références), pondérés par la grille. Les critères intrinsèques à points (sections, données, code) nécessitent " +
       "le texte intégral et n'y figurent pas. Percentile au sein du groupe.",
     qualite_ex_post:
-      "Coefficient de qualité estimé sur les critères « ex-post » comptables dans OpenAlex (citations, top 1 % / " +
-      "10 %, FWCI, ODD), pondérés par la grille. Percentile au sein du groupe.",
+      "Coefficient de qualité estimé sur les critères « ex-post » comptables dans OpenAlex hors critères d'impact " +
+      "(citations et FWCI sont des indicateurs d'impact), pondérés par la grille. Percentile au sein du groupe.",
   },
 
   leidenDomain: {

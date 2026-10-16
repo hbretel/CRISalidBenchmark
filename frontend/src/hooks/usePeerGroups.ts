@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { api } from "@/lib/api";
-import type { PeerGroupSummary, PeerMemberInfo, PeerComparisonTable } from "@/types/api";
+import type { GroupBenchmark, PeerGroupSummary, PeerMemberInfo } from "@/types/api";
 
 export function usePeerGroups() {
   return useSWR<PeerGroupSummary[]>(
@@ -34,15 +34,10 @@ export function usePeerGroupMembers(groupId: number | null) {
   );
 }
 
-export function usePeerComparisonTable(
-  groupId: number | null,
-  weightProfileId: number | null,
-  coreOnly: boolean,
-  field: string,
-) {
+export function useGroupBenchmark(groupId: number | null, weightProfileId: number | null, domain: string) {
   const url =
     groupId && weightProfileId
-      ? `/peer-groups/${groupId}/comparison-table?weight_profile_id=${weightProfileId}&core_only=${coreOnly}&field=${encodeURIComponent(field)}`
+      ? `/peer-groups/${groupId}/benchmark?weight_profile_id=${weightProfileId}${domain !== "all" ? `&domain=${domain}` : ""}`
       : null;
-  return useSWR<PeerComparisonTable>(url, (u: string) => api.get<PeerComparisonTable>(u));
+  return useSWR<GroupBenchmark>(url, (u: string) => api.get<GroupBenchmark>(u));
 }

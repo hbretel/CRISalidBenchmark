@@ -5,94 +5,94 @@ Two-level aggregation:
   2. Sub-indicator percentiles are weighted within each axis → axis score (0–100).
   3. Axis scores are weighted → composite score (0–100).
 
-Recalculated entirely on-demand from data in the DB — no scheduled job. Takes a
-weight_profile_id and a peer_group_id directly (no persisted "view" object —
-the frontend picks both independently via the profile/group selectors).
+Used by the comparison-group benchmark (services/group_benchmark.py) and the
+topics signature (services/topics_signature.py).
+
+Missing data never counts as 0: a sub-indicator without a value is left out
+of its axis (the other sub-indicators' weights are renormalized), and an axis
+without any sub-indicator value is left out of the composite (the other axes'
+weights are renormalized). This is what happens to the specificity axis in
+"Tous les domaines" mode, and to the quality axis before the peer cache is
+filled.
+
+Weights: axis weights and the impact / specificity sub-weights come from the
+weight profile; the quality sub-weights (grid categories) are instance-wide
+("Paramètres d'évaluation qualitative", see services/quality/comparable.py).
+
+score_breakdown() returns the full calculation (values, percentiles, weights
+actually applied, contributions) so the frontend can show how a global score
+was obtained.
+
+Recalculated entirely on-demand from data in the DB — no scheduled job.
 """
 
 import logging
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.instance_config import InstanceConfig
-from app.models.peers import PeerGroupMember
-from app.models.profiles import WeightProfile
-from app.services.quality.comparable import quality_axis
-from app.services.ror import normalize_ror
-from app.services.indicators_impact import get_impact_indicators
-from app.services.indicators_specificity import get_specificity_indicators
+from app.services.quality.comparable import SUB_INDICATORS as QUALITY_SUB_INDICATORS
 
 logger = logging.getLogger(__name__)
 
+AXES = ("impact_scientifique", "specificite_disciplinaire", "qualite")
 
-async def calculate_composite(
-    session: AsyncSession,
-    weight_profile_id: int,
-    peer_group_id: int,
+
+def component(key: str, value: float | None, percentile: float | None, unit: str = "") -> dict:
+    return {"key": key, "value": value, "unit": unit, "percentile": percentile}
+
+
+def quality_components(institution_quality: dict | None) -> list[dict]:
+    """Quality-axis components of one institution (quality_scores() entry)."""
+    if not institution_quality:
+        return [component(key, None, None, "×") for key in QUALITY_SUB_INDICATORS]
+    return [
+        component(key, institution_quality["estimates"][key], institution_quality["percentiles"][key], "×")
+        for key in QUALITY_SUB_INDICATORS
+    ]
+
+
+def score_breakdown(
+    components: dict[str, list[dict]],
+    axis_weights: dict[str, float],
+    sub_weights: dict[str, dict[str, float]],
 ) -> dict:
-    profile_result = await session.execute(
-        select(WeightProfile).where(WeightProfile.id == weight_profile_id)
-    )
-    profile = profile_result.scalar_one_or_none()
-    if not profile:
-        raise ValueError(f"WeightProfile {weight_profile_id} not found")
+    """Composite score and its full derivation.
 
-    axis_weights: dict[str, float] = profile.axis_weights
-    sub_weights: dict[str, dict[str, float]] = profile.sub_indicator_weights
+    components: {axis: [component(...)]} — an axis absent or with an empty
+    list is reported as not applicable. Returns {"composite_score", "axes":
+    [{"axis", "score", "weight", "applied_weight", "contribution",
+    "components": [{..., "weight", "applied_weight"}]}]}.
+    """
+    axes = []
+    for axis in AXES:
+        comps = components.get(axis) or []
+        weights = sub_weights.get(axis, {})
+        present = [c for c in comps if c["percentile"] is not None and weights.get(c["key"], 0) > 0]
+        total = sum(weights[c["key"]] for c in present)
+        out_comps = []
+        for c in comps:
+            w = weights.get(c["key"], 0.0)
+            in_score = c in present and total > 0
+            out_comps.append({**c, "weight": w, "applied_weight": round(w / total, 4) if in_score else None})
+        score = sum(c["percentile"] * weights[c["key"]] for c in present) / total if total > 0 else None
+        axes.append({
+            "axis": axis,
+            "applicable": bool(comps),
+            "score": round(score, 1) if score is not None else None,
+            "weight": axis_weights.get(axis, 0.0),
+            "components": out_comps,
+        })
 
-    # ── Impact scientifique ───────────────────────────────────────────────
-    impact_data = await get_impact_indicators(session, peer_group_id)
-    impact_percentiles = {
-        k: v["percentile"]
-        for k, v in impact_data["indicators"].items()
-        if v["percentile"] is not None
-    }
-    impact_sub_weights = sub_weights.get("impact_scientifique", {})
-    impact_score = _weighted_average(impact_percentiles, impact_sub_weights)
-
-    # ── Spécificité disciplinaire ─────────────────────────────────────────
-    specificity_data = await get_specificity_indicators(session, peer_group_id)
-    nb_signature = len(specificity_data["topics_signature"]["items"])
-    specificity_values = {
-        "herfindahl": specificity_data["herfindahl"]["value"] * 100,  # scale to 0–100
-        "nb_topics_signature": min(nb_signature, 100),  # cap raw count for percentile
-    }
-    specificity_sub_weights = sub_weights.get("specificite_disciplinaire", {})
-    # For specificity, these are absolute values, not pre-computed percentiles —
-    # use as-is scaled to 0–100 (herfindahl already ×100; nb_topics capped at 100)
-    specificity_score = _weighted_average(specificity_values, specificity_sub_weights)
-
-    axis_scores = {
-        "impact_scientifique": impact_score,
-        "specificite_disciplinaire": specificity_score,
-    }
-
-    # ── Qualité (evaluation grid, peer-comparable criteria) ───────────────
-    # Percentiles of the estimated quality coefficients within the peer group
-    # (services/quality/comparable.py). Unavailable until the peer cache has
-    # been filled — the axis is then left out and the others renormalized,
-    # rather than counted as 0.
-    config = (await session.execute(select(InstanceConfig).where(InstanceConfig.id == 1))).scalar_one()
-    own_ror = normalize_ror(config.ror_id)
-    member_rors = (await session.execute(
-        select(PeerGroupMember.ror_id).where(PeerGroupMember.peer_group_id == peer_group_id)
-    )).scalars().all()
-    quality = await quality_axis(session, [*member_rors, own_ror] if own_ror else list(member_rors))
-    own_quality = quality.get(own_ror) if own_ror else None
-    if own_quality:
-        axis_scores["qualite"] = _weighted_average(own_quality["percentiles"], sub_weights.get("qualite", {}))
-
-    composite = combine_axes(axis_scores, axis_weights)
-
-    return {
-        "weight_profile_id": weight_profile_id,
-        "peer_group_id": peer_group_id,
-        "composite_score": round(composite, 1),
-        "axis_scores": {k: round(v, 1) for k, v in axis_scores.items()},
-        "axis_weights": axis_weights,
-        "quality_available": own_quality is not None,
-        "sub_weights": sub_weights,
-    }
+    scored = [a for a in axes if a["score"] is not None and a["weight"] > 0]
+    total_axis = sum(a["weight"] for a in scored)
+    composite = 0.0
+    for a in axes:
+        if a in scored and total_axis > 0:
+            a["applied_weight"] = round(a["weight"] / total_axis, 4)
+            a["contribution"] = round(a["score"] * a["weight"] / total_axis, 1)
+            composite += a["score"] * a["weight"] / total_axis
+        else:
+            a["applied_weight"] = None
+            a["contribution"] = None
+    return {"composite_score": round(composite, 1), "axes": axes}
 
 
 def combine_axes(axis_scores: dict[str, float], axis_weights: dict[str, float]) -> float:

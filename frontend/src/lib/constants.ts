@@ -14,6 +14,32 @@ export const LEIDEN_DOMAINS = [
   { value: "Social sciences and humanities" },
 ] as const;
 
+// OpenAlex domains (level 1 of the Topics taxonomy), used by the "Groupes de
+// comparaison" tab — the OpenAlex counterpart of Leiden's main fields, no
+// mapping between the two. Values are the backend `domain` query parameter
+// (OpenAlex domain id); "all" = no domain filter. Labels: openalexDomain.*.
+export const OPENALEX_DOMAINS = [
+  { value: "all" },
+  { value: "1" },
+  { value: "2" },
+  { value: "3" },
+  { value: "4" },
+] as const;
+
+// Impact indicators of the comparison-group benchmark, in display order
+// (shares of publications from OpenAlex counts — backend
+// services/quality/comparable.py IMPACT_CRITERIA). Labels: indicator.*.
+export const GROUP_IMPACT_INDICATORS = [
+  "pp_top_1",
+  "pp_top_10",
+  "pp_fwci_1",
+  "pp_10_cits",
+  "pp_cited",
+  "pp_oa",
+  "pp_int_collab",
+  "pp_industry_collab",
+] as const;
+
 // Default weight profile values
 export const DEFAULT_AXIS_WEIGHTS = {
   impact_scientifique: 0.4,
@@ -22,26 +48,14 @@ export const DEFAULT_AXIS_WEIGHTS = {
 };
 
 export const DEFAULT_SUB_WEIGHTS = {
-  impact_scientifique: {
-    // Abstract key — backend resolves to pp_top_10 or pp_10_cits depending on
-    // the core/all-publications toggle (spec §3.8/§5.1). Never a literal
-    // Leiden column name, so a saved profile stays valid across toggle states.
-    impact_normalise_leiden: 0.5,
-    citations_brutes_moyennes: 0.2,
-    oa_pct: 0.15,
-    collab_intl_pct: 0.15,
-  },
+  impact_scientifique: Object.fromEntries(GROUP_IMPACT_INDICATORS.map((k) => [k, 1 / GROUP_IMPACT_INDICATORS.length])),
+  // Single indicator: share of the institution's publications in the OpenAlex
+  // domain selected in the header (backend services/group_benchmark.py).
   specificite_disciplinaire: {
-    herfindahl: 0.7,
-    nb_topics_signature: 0.3,
+    taux_specialisation: 1,
   },
-  // Estimated evaluation-grid coefficient per grid category, from the
-  // OpenAlex-countable criteria (backend services/quality/comparable.py).
-  qualite: {
-    qualite_ex_ante: 1 / 3,
-    qualite_intrinseque: 1 / 3,
-    qualite_ex_post: 1 / 3,
-  },
+  // No "qualite" entry: the weighting between grid categories is
+  // instance-wide, set on the "Paramètres d'évaluation qualitative" page.
 };
 
 // AXIS_LABELS / INDICATOR_LABELS / SUB_INDICATOR_DESCRIPTIONS moved to
